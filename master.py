@@ -44,6 +44,20 @@ import config
 pending = {} # pending[addr] = challenge
 servers = []
 
+( # Log levels
+    LOG_ERROR,
+    LOG_PRINT,
+    LOG_VERBOSE,
+    LOG_DEBUG
+) = range(4)
+
+def log(level, *args):
+    if level in (LOG_ERROR, LOG_DEBUG):
+        f = stderr
+    else:
+        f = stdout
+    f.write(' '.join(map(str, args)))
+
 def parseinfo(infostring):
     info = dict()
     infostring = infostring.lstrip('\\')
@@ -75,20 +89,20 @@ def heartbeat(addr, data):
 
 def infoResponse(addr, data):
     if addr not in pending.keys():
-        print 'Info response from unwatched server'
+        log(LOG_VERBOSE, 'Info response from unwatched server:', *addr)
         return # we don't care about an inforesponse from this address
-    print 'Info response from %s:%d' % addr, data
+    log(LOG_VERBOSE, 'Info response from %s:%d: %s\n' %
+        (addr[0], addr[1], data))
     data = data.split(None, 1)[1]
     info = parseinfo(data)
-    print info
     try:
         sent = pending[addr]
         recvd = info['challenge']
         if sent == recvd:
             servers.append(addr)
-            print servers
         else:
-            print 'Mismatched challenge'
+            log(LOG_VERBOSE, 'Mismatched challenge: %r != %r\n' %
+                (sent, recvd))
     except KeyError, ex:
         print 'KeyError', str(ex)
     del pending[addr]
@@ -109,16 +123,16 @@ try:
     #   inSock6.bind((config.bind6addr, config.inPort))
     #   outSock6 = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
 except sockerr, (errno, strerror):
-    stderr.write("Couldn't initialise sockets: %s\n" % (strerror,))
+    log(LOG_ERROR, 'Couldn\'t initialise sockets: %s\n' % (strerror,))
     raise
 
 while True:
     (ready, _, _) = select([inSock, outSock], [], [])
     if inSock in ready:
         (data, addr) = inSock.recvfrom(2048)
-        stdout.write('Packet on inSock from %s:%d\n' % addr)
+        log(LOG_VERBOSE, 'Packet on inSock from %s:%d\n' % addr)
         if data[:4] != '\xff\xff\xff\xff':
-            stdout.write('  rejected (no header)\n')
+            log(LOG_VERBOSE, '  rejected (no header)\n')
             continue
         data = data[4:]
         responses = [
@@ -130,15 +144,16 @@ while True:
                 func(addr, data)
                 break
         else:
-            stdout.write('  content: %r\n' % (data,))
+            log(LOG_VERBOSE, '  unrecognised content: %r\n' % (data,))
     if outSock in ready:
         (data, addr) = outSock.recvfrom(2048)
-        stdout.write('Packet on outSock from %s:%d\n' % addr)
+        log(LOG_VERBOSE, 'Packet on outSock from %s:%d\n' % addr)
         if data[:4] != '\xff\xff\xff\xff':
-            stdout.write('  rejected (no header)\n')
+            log(LOG_VERBOSE, '  rejected (no header)\n')
+            continue
         data = data[4:]
         if data.startswith('infoResponse'):
             infoResponse(addr, data)
         else:
-            stdout.write('  content: %r\n' % (data,))
+            log(LOG_VERBOSE, '  unrecognised content: %r\n' % (data,))
 # vim: set expandtab ts=4 sw=4 :
