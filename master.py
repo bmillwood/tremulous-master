@@ -33,15 +33,16 @@ Accepted incoming messages:
         A request from the client to send the list of servers.
 """
 
+from random import choice, randint
 from socket import (socket, error as sockerr, has_ipv6, inet_pton,
                    AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
 from select import select
 from sys import exit, stdout, stderr
-from random import choice, randint
+from time import time, strftime
 
 import config
 
-pending = {} # pending[addr] = challenge
+pending = {}
 servers = []
 
 ( # Log levels
@@ -56,7 +57,59 @@ def log(level, *args):
         f = stderr
     else:
         f = stdout
-    f.write(' '.join(map(str, args)))
+    f.write(strftime('%T ') + ' '.join(map(str, args)))
+
+class Server(object):
+    NEW, CHALLENGED, CONFIRMED = range(3)
+    def __init__(self, addr):
+        self.addr = addr
+        self.state = self.NEW
+        self.lastactive = 0
+
+    def timeout(self):
+        if self.state == self.CONFIRMED:
+            return (time() - self.lastactive > config.SERVER_TIMEOUT)
+        return (time() - self.lastactive > config.CHALLENGE_TIMEOUT)
+
+    def heartbeat(self, data):
+        self.challenge = challenge()
+        outSock.sendto('\xff\xff\xff\xffgetinfo %s' % (self.challenge,),
+            self.addr)
+        if self.state == self.NEW:
+            self.challengetime = time()
+            self.state = self.CHALLENGED
+        log(LOG_VERBOSE, 'Sent challenge\n')
+
+    def respond(self, data):
+        if data.startswith('infoResponse'):
+            return self.infoResponse(data)
+
+    def infoResponse(self, data):
+        if (self.state == self.CHALLENGED and
+                time() - self.challengetime > config.CHALLENGE_TIMEOUT):
+            log(LOG_VERBOSE, 'Challenge response rejected: too late\n')
+            return False
+        infostring = data.split(None, 1)[1]
+        info = parseinfo(infostring)
+        try:
+            if info['challenge'] != self.challenge:
+                return False
+            self.protocol = info['protocol']
+            self.empty = (info['clients'] == '0')
+            self.full = (info['clients'] == info['sv_maxclients'])
+        except KeyError, ex:
+            log(LOG_VERBOSE, 'Server info key missing: %s\n' % (ex,))
+            return False
+        self.state = self.CONFIRMED
+        self.lastactive = time()
+        log(LOG_DEBUG, 'Last active time updated for %s:%s\n' % self.addr)
+        return True
+
+def prune_timeouts(list):
+    for server in filter(lambda s: s.timeout(), list):
+        log(LOG_VERBOSE, 'Server dropped due to %ss inactivity: %s:%s\n' %
+                (time() - server.lastactive, server.addr[0], server.addr[1]))
+        list.remove(server)
 
 def parseinfo(infostring):
     info = dict()
@@ -83,34 +136,15 @@ def challenge():
     return ''.join([choice(valid) for _ in range(config.CHALLENGE_LENGTH)])
 
 def heartbeat(addr, data):
-    c = challenge()
-    pending[addr] = c
-    outSock.sendto('\xff\xff\xff\xffgetinfo ' + c, addr)
-
-def infoResponse(addr, data):
-    if addr not in pending.keys():
-        log(LOG_VERBOSE, 'Info response from unwatched server:', *addr)
-        return # we don't care about an inforesponse from this address
-    log(LOG_VERBOSE, 'Info response from %s:%d: %s\n' %
-        (addr[0], addr[1], data))
-    data = data.split(None, 1)[1]
-    info = parseinfo(data)
-    try:
-        sent = pending[addr]
-        recvd = info['challenge']
-        if sent == recvd:
-            servers.append(addr)
-        else:
-            log(LOG_VERBOSE, 'Mismatched challenge: %r != %r\n' %
-                (sent, recvd))
-    except KeyError, ex:
-        print 'KeyError', str(ex)
-    del pending[addr]
+    s = Server(addr)
+    s.heartbeat(data)
+    pending[addr] = s
 
 def getservers(addr, data):
+    prune_timeouts(servers)
     inSock.sendto('\xff\xff\xff\xffgetserversResponse\\' + '\\'.join([
-        inet_pton(AF_INET, server[0]) +
-        chr(server[1] >> 8) + chr(server[1] & 0xff)
+        inet_pton(AF_INET, server.addr[0]) +
+        chr(server.addr[1] >> 8) + chr(server.addr[1] & 0xff)
         for server in servers] + ['EOT\0\0\0']), addr)
 
 try:
@@ -152,8 +186,11 @@ while True:
             log(LOG_VERBOSE, '  rejected (no header)\n')
             continue
         data = data[4:]
-        if data.startswith('infoResponse'):
-            infoResponse(addr, data)
-        else:
-            log(LOG_VERBOSE, '  unrecognised content: %r\n' % (data,))
+        if addr not in pending.keys():
+            log(LOG_VERBOSE, '  rejected (unsolicited)\n')
+            continue
+        if pending[addr].respond(data) and pending[addr] not in servers:
+            servers.append(pending[addr])
+            log(LOG_VERBOSE, 'Server confirmed: %s:%d\n' % (addr[0], addr[1]))
+        del pending[addr]
 # vim: set expandtab ts=4 sw=4 :
