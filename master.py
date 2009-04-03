@@ -77,7 +77,7 @@ class Server(object):
 
     def heartbeat(self, data):
         self.challenge = challenge()
-        self.sock.sendto('\xff\xff\xff\xffgetinfo %s' % (self.challenge,),
+        self.sock.sendto('\xff\xff\xff\xffgetinfo ' + self.challenge,
             self.addr)
         if self.state == self.NEW:
             self.challengetime = time()
@@ -102,17 +102,19 @@ class Server(object):
             self.empty = (info['clients'] == '0')
             self.full = (info['clients'] == info['sv_maxclients'])
         except KeyError, ex:
-            log(LOG_VERBOSE, 'Server info key missing: %s\n' % (ex,))
+            log(LOG_VERBOSE, 'Server info key missing: {0}\n'.format(ex))
             return False
         self.state = self.CONFIRMED
         self.lastactive = time()
-        log(LOG_DEBUG, 'Last active time updated for %s:%s\n' % self.addr)
+        log(LOG_DEBUG, 'Last active time updated for '
+                       '{0[0]}:{0[1]}\n'.format(self.addr))
         return True
 
 def prune_timeouts(list):
     for server in filter(lambda s: s.timeout(), list):
-        log(LOG_VERBOSE, 'Server dropped due to %ss inactivity: %s:%s\n' %
-                (time() - server.lastactive, server.addr[0], server.addr[1]))
+        log(LOG_VERBOSE, 'Server dropped due to {0}s inactivity: '
+                         '{1[0]}:{1[1]}\n'.format(time() - server.lastactive,
+                                                  server.addr))
         list.remove(server)
 
 def parseinfo(infostring):
@@ -182,7 +184,7 @@ try:
         log(LOG_ERROR, 'Error: Not listening on any sockets, aborting\n')
         exit(1)
 except sockerr, (errno, strerror):
-    log(LOG_ERROR, 'Couldn\'t initialise sockets: %s\n' % (strerror,))
+    log(LOG_ERROR, 'Couldn\'t initialise sockets: {0}\n'.format(strerror))
     raise
 
 while True:
@@ -191,8 +193,8 @@ while True:
     for sock in inSocks.values():
         if sock in ready:
             (data, addr) = sock.recvfrom(2048)
-            log(LOG_VERBOSE, 'Packet on sock from %s:%s\n' %
-                (addr[0], addr[1]))
+            log(LOG_VERBOSE, 'Packet on inSock from '
+                             '{0[0]}:{0[1]}\n'.format(addr))
             if data[:4] != '\xff\xff\xff\xff':
                 log(LOG_VERBOSE, '  rejected (no header)\n')
                 continue
@@ -207,11 +209,13 @@ while True:
                     func(sock, addr, data)
                     break
             else:
-                log(LOG_VERBOSE, '  unrecognised content: %r\n' % (data,))
+                log(LOG_VERBOSE, '  unrecognised content: '
+                                 '{0!r}\n'.format(data))
     for sock in outSocks.values():
         if sock in ready:
             (data, addr) = sock.recvfrom(2048)
-            log(LOG_VERBOSE, 'Packet on sock from %s:%d\n' % addr)
+            log(LOG_VERBOSE, 'Packet on sock from '
+                             '{0[0]}:{0[1]}\n'.format(addr))
             if data[:4] != '\xff\xff\xff\xff':
                 log(LOG_VERBOSE, '  rejected (no header)\n')
                 continue
@@ -221,7 +225,7 @@ while True:
                 continue
             if pending[addr].respond(data) and pending[addr] not in servers:
                 servers.append(pending[addr])
-                log(LOG_VERBOSE, 'Server confirmed: %s:%s\n' %
-                    (addr[0], addr[1]))
+                log(LOG_VERBOSE, 'Server confirmed: '
+                                 '{0[0]}:{0[1]}\n'.format(addr))
             del pending[addr]
 # vim: set expandtab ts=4 sw=4 :
