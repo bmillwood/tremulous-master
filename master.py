@@ -21,6 +21,7 @@
 # Place, Suite 330, Boston, MA  02111-1307  USA
 ###############################################################################
 """The Tremulous Master Server
+Requires Python 2.6
 
 Protocol for this is pretty simple.
 Accepted incoming messages:
@@ -42,6 +43,8 @@ from time import time, strftime
 
 import config
 
+inSocks, outSocks = {}, {}
+
 pending = {}
 servers = []
 
@@ -61,8 +64,9 @@ def log(level, *args):
 
 class Server(object):
     NEW, CHALLENGED, CONFIRMED = range(3)
-    def __init__(self, addr):
+    def __init__(self, sock, addr):
         self.addr = addr
+        self.sock = outSocks[sock.family]
         self.state = self.NEW
         self.lastactive = 0
 
@@ -73,7 +77,7 @@ class Server(object):
 
     def heartbeat(self, data):
         self.challenge = challenge()
-        outSock.sendto('\xff\xff\xff\xffgetinfo %s' % (self.challenge,),
+        self.sock.sendto('\xff\xff\xff\xffgetinfo %s' % (self.challenge,),
             self.addr)
         if self.state == self.NEW:
             self.challengetime = time()
@@ -135,62 +139,89 @@ def challenge():
     valid = [c for c in map(chr, range(0x21, 0x7f)) if c not in '\\;\"/']
     return ''.join([choice(valid) for _ in range(config.CHALLENGE_LENGTH)])
 
-def heartbeat(addr, data):
-    s = Server(addr)
+def heartbeat(sock, addr, data):
+    s = Server(sock, addr)
     s.heartbeat(data)
     pending[addr] = s
 
-def getservers(addr, data):
-    prune_timeouts(servers)
-    inSock.sendto('\xff\xff\xff\xffgetserversResponse\\' + '\\'.join([
-        inet_pton(AF_INET, server.addr[0]) +
-        chr(server.addr[1] >> 8) + chr(server.addr[1] & 0xff)
-        for server in servers] + ['EOT\0\0\0']), addr)
+def getservers(sock, addr, data):
+    ext = data.startswith('getserversExt')
+    start = '\xff\xff\xff\xffgetservers{0}Response'.format(
+               'Ext' if ext else '')
+    response = start
+    end = '\\EOT\0\0\0'
+    assert config.GSR_MAXLENGTH > len(response) + len(end)
+    for server in servers:
+        af = server.sock.family
+        sep = '/' if af == AF_INET6 else '\\'
+        add = (sep + inet_pton(af, server.addr[0]) +
+               chr(server.addr[1] >> 8) + chr(server.addr[1] & 0xff))
+        if len(response) + len(add) + len(end) > config.GSR_MAXLENGTH:
+            response += end
+            sock.sendto(response, addr)
+            response = start
 
 try:
-    inSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-    inSock.bind((config.bindaddr, config.inPort))
-    outSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-    outSock.bind((config.bindaddr, config.outPort))
-    #if has_ipv6:
-    #   inSock6 = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
-    #   inSock6.bind((config.bind6addr, config.inPort))
-    #   outSock6 = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
+    if config.bindaddr:
+        inSocks[AF_INET] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        inSocks[AF_INET].bind((config.bindaddr, config.inPort))
+        outSocks[AF_INET] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        outSocks[AF_INET].bind((config.bindaddr, config.outPort))
+        log(LOG_PRINT, 'IPv4: Listening on', config.bindaddr,
+                       'port', config.inPort)
+
+    if config.bind6addr and has_ipv6:
+        inSocks[AF_INET6] = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
+        inSocks[AF_INET6].bind((config.bind6addr, config.inPort))
+        outSocks[AF_INET6] = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
+        outSocks[AF_INET6].bind((config.bind6addr, config.outPort))
+        log(LOG_PRINT, 'IPv6: Listening on', config.bind6addr,
+                       'port', config.inPort)
+
+    if not inSocks and not outSocks:
+        log(LOG_ERROR, 'Error: Not listening on any sockets, aborting\n')
+        exit(1)
 except sockerr, (errno, strerror):
     log(LOG_ERROR, 'Couldn\'t initialise sockets: %s\n' % (strerror,))
     raise
 
 while True:
-    (ready, _, _) = select([inSock, outSock], [], [])
-    if inSock in ready:
-        (data, addr) = inSock.recvfrom(2048)
-        log(LOG_VERBOSE, 'Packet on inSock from %s:%d\n' % addr)
-        if data[:4] != '\xff\xff\xff\xff':
-            log(LOG_VERBOSE, '  rejected (no header)\n')
-            continue
-        data = data[4:]
-        responses = [
-            ('heartbeat', heartbeat),
-            ('getservers', getservers)
-        ]
-        for (name, func) in responses:
-            if data.startswith(name):
-                func(addr, data)
-                break
-        else:
-            log(LOG_VERBOSE, '  unrecognised content: %r\n' % (data,))
-    if outSock in ready:
-        (data, addr) = outSock.recvfrom(2048)
-        log(LOG_VERBOSE, 'Packet on outSock from %s:%d\n' % addr)
-        if data[:4] != '\xff\xff\xff\xff':
-            log(LOG_VERBOSE, '  rejected (no header)\n')
-            continue
-        data = data[4:]
-        if addr not in pending.keys():
-            log(LOG_VERBOSE, '  rejected (unsolicited)\n')
-            continue
-        if pending[addr].respond(data) and pending[addr] not in servers:
-            servers.append(pending[addr])
-            log(LOG_VERBOSE, 'Server confirmed: %s:%d\n' % (addr[0], addr[1]))
-        del pending[addr]
+    (ready, _, _) = select(inSocks.values() + outSocks.values(), [], [])
+    prune_timeouts(servers)
+    for sock in inSocks.values():
+        if sock in ready:
+            (data, addr) = sock.recvfrom(2048)
+            log(LOG_VERBOSE, 'Packet on sock from %s:%s\n' %
+                (addr[0], addr[1]))
+            if data[:4] != '\xff\xff\xff\xff':
+                log(LOG_VERBOSE, '  rejected (no header)\n')
+                continue
+            data = data[4:]
+            responses = [
+                ('heartbeat', heartbeat),
+                ('getservers', getservers),
+                ('getserversExt', getservers)
+            ]
+            for (name, func) in responses:
+                if data.startswith(name):
+                    func(sock, addr, data)
+                    break
+            else:
+                log(LOG_VERBOSE, '  unrecognised content: %r\n' % (data,))
+    for sock in outSocks.values():
+        if sock in ready:
+            (data, addr) = sock.recvfrom(2048)
+            log(LOG_VERBOSE, 'Packet on sock from %s:%d\n' % addr)
+            if data[:4] != '\xff\xff\xff\xff':
+                log(LOG_VERBOSE, '  rejected (no header)\n')
+                continue
+            data = data[4:]
+            if addr not in pending.keys():
+                log(LOG_VERBOSE, '  rejected (unsolicited)\n')
+                continue
+            if pending[addr].respond(data) and pending[addr] not in servers:
+                servers.append(pending[addr])
+                log(LOG_VERBOSE, 'Server confirmed: %s:%s\n' %
+                    (addr[0], addr[1]))
+            del pending[addr]
 # vim: set expandtab ts=4 sw=4 :
