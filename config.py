@@ -69,8 +69,7 @@ inPort = 30710
 # special treatment.
 outPort = 30711
 
-# currently unused
-# what's the point, anyway?
+# what's the point of this option?
 maxservers = -1
 
 # these correspond to values defined in tremulous source, changing them may

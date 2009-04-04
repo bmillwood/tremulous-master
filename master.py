@@ -47,7 +47,7 @@ config.parse()
 inSocks, outSocks = {}, {}
 
 pending = {}
-servers = []
+servers = {}
 
 class Server(object):
     NEW, CHALLENGED, CONFIRMED = range(3)
@@ -100,12 +100,13 @@ class Server(object):
                        '{0[0]}:{0[1]}'.format(self.addr))
         return True
 
-def prune_timeouts(list):
-    for server in filter(lambda s: s.timeout(), list):
+def prune_timeouts(servers):
+    for addr in filter(lambda k: servers[k].timeout(), servers.keys()):
+        server = servers[addr]
         log(LOG_VERBOSE, 'Server dropped due to {0}s inactivity: '
                          '{1[0]}:{1[1]}'.format(time() - server.lastactive,
                                                   server.addr))
-        list.remove(server)
+        del servers[addr]
 
 def parseinfo(infostring):
     info = dict()
@@ -132,6 +133,14 @@ def challenge():
     return ''.join([choice(valid) for _ in range(config.CHALLENGE_LENGTH)])
 
 def heartbeat(sock, addr, data):
+    if config.maxservers > 0 and len(servers) + len(pending) >= config.maxservers:
+        log(LOG_VERBOSE, 'Warning: max server count exceeded, '
+                         'heartbeat from {0[0]}:{0[1]} ignored'.format(addr))
+        return
+    if addr in servers.keys():
+        servers[addr].heartbeat(data)
+        pending[addr] = servers[addr]
+        return
     s = Server(sock, addr)
     s.heartbeat(data)
     pending[addr] = s
@@ -143,7 +152,7 @@ def getservers(sock, addr, data):
     response = start
     end = '\\EOT\0\0\0'
     assert config.GSR_MAXLENGTH > len(response) + len(end)
-    for server in servers:
+    for server in servers.values():
         af = server.sock.family
         if not ext and af == AF_INET6:
             continue
@@ -231,6 +240,6 @@ while True:
                 log(LOG_VERBOSE, addrstr, 'rejected (unsolicited)')
                 continue
             if pending[addr].respond(data) and pending[addr] not in servers:
-                servers.append(pending[addr])
+                servers[addr] = pending[addr]
                 log(LOG_VERBOSE, addrstr, 'Server confirmed')
             del pending[addr]
