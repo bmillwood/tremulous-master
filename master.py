@@ -38,31 +38,16 @@ from random import choice, randint
 from socket import (socket, error as sockerr, has_ipv6, inet_pton,
                    AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
 from select import select
-from sys import exit, stdout, stderr
-from time import time, strftime
+from time import time
 
 import config
+from config import log, LOG_ERROR, LOG_PRINT, LOG_VERBOSE, LOG_DEBUG
+config.parse()
 
 inSocks, outSocks = {}, {}
 
 pending = {}
 servers = []
-
-( # Log levels
-    LOG_ERROR,
-    LOG_PRINT,
-    LOG_VERBOSE,
-    LOG_DEBUG
-) = range(4)
-
-def log(level, *args):
-    if not args:
-        raise TypeError('No log message provided')
-    if level in (LOG_ERROR, LOG_DEBUG):
-        f = stderr
-    else:
-        f = stdout
-    f.write(strftime('[%T] ') + ' '.join(map(str, args)) + '\n')
 
 class Server(object):
     NEW, CHALLENGED, CONFIRMED = range(3)
@@ -71,6 +56,9 @@ class Server(object):
         self.sock = outSocks[sock.family]
         self.state = self.NEW
         self.lastactive = 0
+
+    def __str__(self):
+        return '[{0[0]}]:{0[1]}'.format(self.addr)
 
     def timeout(self):
         if self.state == self.CONFIRMED:
@@ -182,7 +170,7 @@ def filterpacket(data, addr):
         return 'blacklisted'
 
 try:
-    if config.bindaddr:
+    if not config.disable_ipv4 and config.bindaddr:
         inSocks[AF_INET] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         inSocks[AF_INET].bind((config.bindaddr, config.inPort))
         outSocks[AF_INET] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
@@ -190,7 +178,7 @@ try:
         log(LOG_PRINT, 'IPv4: Listening on', config.bindaddr,
                        'port', config.inPort)
 
-    if config.bind6addr and has_ipv6:
+    if not config.disable_ipv6 and config.bind6addr and has_ipv6:
         inSocks[AF_INET6] = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
         inSocks[AF_INET6].bind((config.bind6addr, config.inPort))
         outSocks[AF_INET6] = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
@@ -200,7 +188,8 @@ try:
 
     if not inSocks and not outSocks:
         log(LOG_ERROR, 'Error: Not listening on any sockets, aborting')
-        exit(1)
+        raise SystemExit(1)
+
 except sockerr, (errno, strerror):
     log(LOG_ERROR, 'Couldn\'t initialise sockets:', strerror)
     raise
@@ -245,4 +234,3 @@ while True:
                 servers.append(pending[addr])
                 log(LOG_VERBOSE, addrstr, 'Server confirmed')
             del pending[addr]
-# vim: set expandtab ts=4 sw=4 :
