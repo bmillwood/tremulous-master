@@ -60,7 +60,7 @@ def log(level, *args):
         f = stderr
     else:
         f = stdout
-    f.write(strftime('%T ') + ' '.join(map(str, args)))
+    f.write(strftime('%T ') + ' '.join(map(str, args)) + '\n')
 
 class Server(object):
     NEW, CHALLENGED, CONFIRMED = range(3)
@@ -82,7 +82,7 @@ class Server(object):
         if self.state == self.NEW:
             self.challengetime = time()
             self.state = self.CHALLENGED
-        log(LOG_VERBOSE, 'Sent challenge\n')
+        log(LOG_VERBOSE, 'Sent challenge')
 
     def respond(self, data):
         if data.startswith('infoResponse'):
@@ -91,7 +91,7 @@ class Server(object):
     def infoResponse(self, data):
         if (self.state == self.CHALLENGED and
                 time() - self.challengetime > config.CHALLENGE_TIMEOUT):
-            log(LOG_VERBOSE, 'Challenge response rejected: too late\n')
+            log(LOG_VERBOSE, 'Challenge response rejected: too late')
             return False
         infostring = data.split(None, 1)[1]
         info = parseinfo(infostring)
@@ -102,18 +102,18 @@ class Server(object):
             self.empty = (info['clients'] == '0')
             self.full = (info['clients'] == info['sv_maxclients'])
         except KeyError, ex:
-            log(LOG_VERBOSE, 'Server info key missing: {0}\n'.format(ex))
+            log(LOG_VERBOSE, 'Server info key missing:', ex)
             return False
         self.state = self.CONFIRMED
         self.lastactive = time()
         log(LOG_DEBUG, 'Last active time updated for '
-                       '{0[0]}:{0[1]}\n'.format(self.addr))
+                       '{0[0]}:{0[1]}'.format(self.addr))
         return True
 
 def prune_timeouts(list):
     for server in filter(lambda s: s.timeout(), list):
         log(LOG_VERBOSE, 'Server dropped due to {0}s inactivity: '
-                         '{1[0]}:{1[1]}\n'.format(time() - server.lastactive,
+                         '{1[0]}:{1[1]}'.format(time() - server.lastactive,
                                                   server.addr))
         list.remove(server)
 
@@ -181,10 +181,10 @@ try:
                        'port', config.inPort)
 
     if not inSocks and not outSocks:
-        log(LOG_ERROR, 'Error: Not listening on any sockets, aborting\n')
+        log(LOG_ERROR, 'Error: Not listening on any sockets, aborting')
         exit(1)
 except sockerr, (errno, strerror):
-    log(LOG_ERROR, 'Couldn\'t initialise sockets: {0}\n'.format(strerror))
+    log(LOG_ERROR, 'Couldn\'t initialise sockets:', strerror)
     raise
 
 while True:
@@ -194,9 +194,9 @@ while True:
         if sock in ready:
             (data, addr) = sock.recvfrom(2048)
             log(LOG_VERBOSE, 'Packet on inSock from '
-                             '{0[0]}:{0[1]}\n'.format(addr))
+                             '{0[0]}:{0[1]}'.format(addr))
             if data[:4] != '\xff\xff\xff\xff':
-                log(LOG_VERBOSE, '  rejected (no header)\n')
+                log(LOG_VERBOSE, '  rejected (no header)')
                 continue
             data = data[4:]
             responses = [
@@ -209,23 +209,22 @@ while True:
                     func(sock, addr, data)
                     break
             else:
-                log(LOG_VERBOSE, '  unrecognised content: '
-                                 '{0!r}\n'.format(data))
+                log(LOG_VERBOSE, '  unrecognised content:', repr(data))
     for sock in outSocks.values():
         if sock in ready:
             (data, addr) = sock.recvfrom(2048)
             log(LOG_VERBOSE, 'Packet on sock from '
-                             '{0[0]}:{0[1]}\n'.format(addr))
+                             '{0[0]}:{0[1]}'.format(addr))
             if data[:4] != '\xff\xff\xff\xff':
-                log(LOG_VERBOSE, '  rejected (no header)\n')
+                log(LOG_VERBOSE, '  rejected (no header)')
                 continue
             data = data[4:]
             if addr not in pending.keys():
-                log(LOG_VERBOSE, '  rejected (unsolicited)\n')
+                log(LOG_VERBOSE, '  rejected (unsolicited)')
                 continue
             if pending[addr].respond(data) and pending[addr] not in servers:
                 servers.append(pending[addr])
                 log(LOG_VERBOSE, 'Server confirmed: '
-                                 '{0[0]}:{0[1]}\n'.format(addr))
+                                 '{0[0]}:{0[1]}'.format(addr))
             del pending[addr]
 # vim: set expandtab ts=4 sw=4 :
