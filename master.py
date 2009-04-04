@@ -157,13 +157,23 @@ def getservers(sock, addr, data):
     assert config.GSR_MAXLENGTH > len(response) + len(end)
     for server in servers:
         af = server.sock.family
+        if not ext and af == AF_INET6:
+            continue
         sep = '/' if af == AF_INET6 else '\\'
         add = (sep + inet_pton(af, server.addr[0]) +
                chr(server.addr[1] >> 8) + chr(server.addr[1] & 0xff))
         if len(response) + len(add) + len(end) > config.GSR_MAXLENGTH:
             response += end
+            log(LOG_DEBUG, '>> {0[0]}:{0[1]}:'.format(addr), repr(response))
             sock.sendto(response, addr)
             response = start
+        else:
+            response += add
+    if response != start:
+        assert not response.endswith(end)
+        response += end
+        log(LOG_DEBUG, '>> {0[0]}:{0[1]}:'.format(addr), repr(response))
+        sock.sendto(response, addr)
 
 def filterpacket(data, addr):
     if not data.startswith('\xff\xff\xff\xff'):
