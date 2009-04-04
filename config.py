@@ -69,6 +69,12 @@ inPort = 30710
 # special treatment.
 outPort = 30711
 
+# currently unused
+# what's the point, anyway?
+maxservers = -1
+
+# these correspond to values defined in tremulous source, changing them may
+# cause incompatibilities
 CHALLENGE_LENGTH = 12
 CHALLENGE_TIMEOUT = 5
 SERVER_TIMEOUT = 11 * 60
@@ -146,28 +152,17 @@ def opt_jail(arg):
         log(LOG_ERROR, 'chroot {0}: {1}'.format(arg, strerror))
         raise SystemExit(1)
 
-def opt_user(arg):
-    try:
-        uid = getpwnam(arg)[2]
-    except KeyError:
-        if intable(arg):
-            uid = int(arg)
-        else:
-            log(LOG_ERROR, '{0}: name not found'.format(arg))
-            raise SystemExit(1)
-
-    try:
-        setuid(uid)
-        log(LOG_VERBOSE, 'UID is now', getuid())
-    except OSError, (errno, strerror):
-        log(LOG_ERROR, 'setuid {0}: {1}'.format(uid, strerror))
-        raise SystemExit(1)
-
 def opt_listenaddr(arg):
+    global bindaddr
     bindaddr = arg
 
 def opt_listen6addr(arg):
+    global bind6addr
     bind6addr = arg
+
+def opt_maxservers(arg):
+    global maxservers
+    maxservers = int(arg)
 
 challengeport_set = False
 
@@ -198,6 +193,23 @@ def opt_challengeport(arg):
     if inPort == outPort:
         log(LOG_PRINT, 'Warning: the challenge port should not be the same as '
                        'the listen port ({0})'.format(inPort))
+
+def opt_user(arg):
+    try:
+        uid = getpwnam(arg)[2]
+    except KeyError:
+        if intable(arg):
+            uid = int(arg)
+        else:
+            log(LOG_ERROR, '{0}: name not found'.format(arg))
+            raise SystemExit(1)
+
+    try:
+        setuid(uid)
+        log(LOG_VERBOSE, 'UID is now', getuid())
+    except OSError, (errno, strerror):
+        log(LOG_ERROR, 'setuid {0}: {1}'.format(uid, strerror))
+        raise SystemExit(1)
 
 def opt_verbose(arg):
     global loglevel
