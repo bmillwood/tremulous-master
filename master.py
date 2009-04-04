@@ -56,11 +56,13 @@ servers = []
 ) = range(4)
 
 def log(level, *args):
+    if not args:
+        raise TypeError('No log message provided')
     if level in (LOG_ERROR, LOG_DEBUG):
         f = stderr
     else:
         f = stdout
-    f.write(strftime('%T ') + ' '.join(map(str, args)) + '\n')
+    f.write(strftime('[%T] ') + ' '.join(map(str, args)) + '\n')
 
 class Server(object):
     NEW, CHALLENGED, CONFIRMED = range(3)
@@ -82,7 +84,7 @@ class Server(object):
         if self.state == self.NEW:
             self.challengetime = time()
             self.state = self.CHALLENGED
-        log(LOG_VERBOSE, 'Sent challenge')
+        log(LOG_VERBOSE, '>> {0[0]}:{0[1]}: getinfo'.format(self.addr))
 
     def respond(self, data):
         if data.startswith('infoResponse'):
@@ -163,6 +165,12 @@ def getservers(sock, addr, data):
             sock.sendto(response, addr)
             response = start
 
+def filterpacket(data, addr):
+    if not data.startswith('\xff\xff\xff\xff'):
+        return 'no header'
+    if addr[0] in config.addr_blacklist:
+        return 'blacklisted'
+
 try:
     if config.bindaddr:
         inSocks[AF_INET] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
@@ -193,10 +201,10 @@ while True:
     for sock in inSocks.values():
         if sock in ready:
             (data, addr) = sock.recvfrom(2048)
-            log(LOG_VERBOSE, 'Packet on inSock from '
-                             '{0[0]}:{0[1]}'.format(addr))
-            if data[:4] != '\xff\xff\xff\xff':
-                log(LOG_VERBOSE, '  rejected (no header)')
+            addrstr = '<< {0[0]}:{0[1]}:'.format(addr)
+            res = filterpacket(data, addr)
+            if res:
+                log(LOG_VERBOSE, addrstr, 'rejected ({0})'.format(res))
                 continue
             data = data[4:]
             responses = [
@@ -206,25 +214,25 @@ while True:
             ]
             for (name, func) in responses:
                 if data.startswith(name):
+                    log(LOG_VERBOSE, addrstr, name)
                     func(sock, addr, data)
                     break
             else:
-                log(LOG_VERBOSE, '  unrecognised content:', repr(data))
+                log(LOG_VERBOSE, addrstr, 'unrecognised content:', repr(data))
     for sock in outSocks.values():
         if sock in ready:
             (data, addr) = sock.recvfrom(2048)
-            log(LOG_VERBOSE, 'Packet on sock from '
-                             '{0[0]}:{0[1]}'.format(addr))
-            if data[:4] != '\xff\xff\xff\xff':
-                log(LOG_VERBOSE, '  rejected (no header)')
+            addrstr = '<< {0[0]}:{0[1]}:'.format(addr)
+            res = filterpacket(data, addr)
+            if res:
+                log(LOG_VERBOSE, addrstr, 'rejected ({0})'.format(res))
                 continue
             data = data[4:]
             if addr not in pending.keys():
-                log(LOG_VERBOSE, '  rejected (unsolicited)')
+                log(LOG_VERBOSE, addrstr, 'rejected (unsolicited)')
                 continue
             if pending[addr].respond(data) and pending[addr] not in servers:
                 servers.append(pending[addr])
-                log(LOG_VERBOSE, 'Server confirmed: '
-                                 '{0[0]}:{0[1]}'.format(addr))
+                log(LOG_VERBOSE, addrstr, 'Server confirmed')
             del pending[addr]
 # vim: set expandtab ts=4 sw=4 :
