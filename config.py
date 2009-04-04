@@ -2,8 +2,8 @@
 # Copyright (c) Ben Millwood 2009
 # This file is part of the Tremulous Master server.
 
-bindaddr = '0.0.0.0'
-bind6addr = '::'
+bindaddr = '127.1'
+bind6addr = '::1'
 inPort = 30710
 # If we use the same port for challenges as we receive heartbeats on, some
 # improperly configured NAT implementations will recognise the challenge as
@@ -16,3 +16,4 @@ outPort = 30711
 CHALLENGE_LENGTH = 12
 CHALLENGE_TIMEOUT = 5
 SERVER_TIMEOUT = 11 * 60
+GSR_MAXLENGTH = 1400
