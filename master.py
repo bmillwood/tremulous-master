@@ -191,8 +191,10 @@ def heartbeat(sock, addr, data):
 
 def getservers(sock, addr, data):
     tokens = data.split()
-    ext = (tokens[0] == 'getserversExt')
-    protocol = tokens[1]
+    ext = (tokens.pop(0) == 'getserversExt')
+    if ext:
+        tokens.pop(0) # 'Tremulous'
+    protocol = tokens.pop(0)
     empty = 'empty' in tokens
     full = 'full' in tokens
 
@@ -206,14 +208,12 @@ def getservers(sock, addr, data):
 
     for server in servers.values():
         af = server.sock.family
-        if af == AF_INET6:
-            if not ext:
-                log(LOG_DEBUG, 'Dropping', server, 'IPv6 and not ext',
-                    sep = ': ')
-                continue
-            sep = '/'
+        if af == AF_INET6 and not ext:
+            log(LOG_DEBUG, 'Dropping', server, 'IPv6 and not ext', sep = ': ')
+            continue
         if server.protocol != protocol:
-            log(LOG_DEBUG, 'Dropping', server, 'wrong protocol', sep = ': ')
+            log(LOG_DEBUG, 'Dropping {0}: wrong protocol ({1} != {2})'.format(
+                            server, server.protocol, protocol))
             continue
         if server.empty and not empty:
             log(LOG_DEBUG, 'Dropping', server, 'empty', sep = ': ')
@@ -221,8 +221,7 @@ def getservers(sock, addr, data):
         if server.full and not full:
             log(LOG_DEBUG, 'Dropping', server, 'full', sep = ': ')
             continue
-        else:
-            sep = '\\'
+        sep = '/' if af == AF_INET6 else '\\'
         add = (sep + inet_pton(af, server.addr[0]) +
                chr(server.addr[1] >> 8) + chr(server.addr[1] & 0xff))
         if len(response) + len(add) + len(end) > config.GSR_MAXLENGTH:
