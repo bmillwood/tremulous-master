@@ -157,7 +157,12 @@ def heartbeat(sock, addr, data):
     pending[addr] = s
 
 def getservers(sock, addr, data):
-    ext = data.startswith('getserversExt')
+    tokens = data.split()
+    ext = (tokens[0] == 'getserversExt')
+    protocol = tokens[1]
+    empty = 'empty' in tokens
+    full = 'full' in tokens
+
     start = '\xff\xff\xff\xffgetservers{0}Response'.format(
                'Ext' if ext else '')
     response = start
@@ -168,9 +173,23 @@ def getservers(sock, addr, data):
 
     for server in servers.values():
         af = server.sock.family
-        if not ext and af == AF_INET6:
+        if af == AF_INET6:
+            if not ext:
+                log(LOG_DEBUG, 'Dropping', server, 'IPv6 and not ext',
+                    sep = ': ')
+                continue
+            sep = '/'
+        if server.protocol != protocol:
+            log(LOG_DEBUG, 'Dropping', server, 'wrong protocol', sep = ': ')
             continue
-        sep = '/' if af == AF_INET6 else '\\'
+        if server.empty and not empty:
+            log(LOG_DEBUG, 'Dropping', server, 'empty', sep = ': ')
+            continue
+        if server.full and not full:
+            log(LOG_DEBUG, 'Dropping', server, 'full', sep = ': ')
+            continue
+        else:
+            sep = '\\'
         add = (sep + inet_pton(af, server.addr[0]) +
                chr(server.addr[1] >> 8) + chr(server.addr[1] & 0xff))
         if len(response) + len(add) + len(end) > config.GSR_MAXLENGTH:
