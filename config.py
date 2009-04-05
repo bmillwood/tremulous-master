@@ -57,10 +57,19 @@ def log(level, *args, **kwargs):
     if level > loglevel:
         return
 
-    sep = kwargs['sep'] if 'sep' in kwargs.keys() else ' '
-    f = stderr if level in (LOG_ERROR, LOG_DEBUG) else stdout
+    if 'sep' in kwargs.keys():
+        sep = kwargs['sep']
+        del kwargs['sep']
+    else:
+        sep = ' '
+
+    if kwargs:
+        raise TypeError('Unexpected keyword argument{0}: {1}'.format(
+                        's' if len(kwargs) != 1 else '',
+                        ' '.join(kwargs.keys())))
 
     try:
+        f = stderr if level in (LOG_ERROR, LOG_DEBUG) else stdout
         f.write(strftime('[%T] ') + sep.join(map(str, args)) + '\n')
     except IOError, (errno, strerror):
         if errno == EIO:
