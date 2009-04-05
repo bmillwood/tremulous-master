@@ -288,8 +288,8 @@ def valid_addr(addr):
             if not intable(piece, 16) or int(piece, 16) & ~0xffff:
                 return False
 
-def parse_cfgs()
-    with open("ignore.txt") as ignore
+def parse_cfgs():
+    with open("ignore.txt") as ignore:
         for line in ignore:
             for addr in line.split():
                 if valid_addr(addr):
