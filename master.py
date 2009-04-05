@@ -63,7 +63,10 @@ class Server(object):
         self.lastactive = 0
 
     def __str__(self):
-        return '[{0[0]}]:{0[1]}'.format(self.addr)
+        return {
+            AF_INET: '{0[0]}:{0[1]}',
+            AF_INET6: '[{0[0]}]:{0[1]}'
+        }[self.sock.family].format(self.addr)
 
     def timeout(self):
         if self.state == self.CONFIRMED:
@@ -138,6 +141,8 @@ def challenge():
     return ''.join([choice(valid) for _ in range(config.CHALLENGE_LENGTH)])
 
 def heartbeat(sock, addr, data):
+    s = Server(sock, addr)
+    log(LOG_VERBOSE, '<<', str(s) + ':', repr(data))
     if (config.maxservers >= 0 and
             len(servers) + len(pending) >= config.maxservers):
         log(LOG_VERBOSE, 'Warning: max server count exceeded, '
@@ -158,6 +163,9 @@ def getservers(sock, addr, data):
     response = start
     end = '\\EOT\0\0\0'
     assert config.GSR_MAXLENGTH > len(response) + len(end)
+
+    log(LOG_VERBOSE, '<<', str(Server(sock, addr)) + ':', repr(data))
+
     for server in servers.values():
         af = server.sock.family
         if not ext and af == AF_INET6:
@@ -233,7 +241,6 @@ while True:
             ]
             for (name, func) in responses:
                 if data.startswith(name):
-                    log(LOG_VERBOSE, addrstr, name)
                     func(sock, addr, data)
                     break
             else:
@@ -252,5 +259,5 @@ while True:
                 continue
             if pending[addr].respond(data) and pending[addr] not in servers:
                 servers[addr] = pending[addr]
-                log(LOG_VERBOSE, addrstr, 'Server confirmed')
+                log(LOG_VERBOSE, addrstr, 'getinfoResponse confirmed')
             del pending[addr]
