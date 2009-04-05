@@ -25,11 +25,11 @@ except ImportError:
 
 version = 'Tremulous Master Server v0.1'
 
-def intable(arg):
+def intable(arg, base = 10):
     '''Tests whether arg can be inted'''
     # this should probably go into another file
     try:
-        int(arg)
+        int(arg, base)
         return True
     except:
         return False
@@ -275,7 +275,18 @@ def valid_addr(addr):
         return True
     else:
         # assume IPv6
-        
+        try:
+            # check for :: appearing twice
+            addr[addr.index('::'):].index('::', 2)
+            return False
+        except ValueError:
+            pass
+        pieces = addr.split(':')
+        if len(pieces) > 8:
+            return False
+        for piece in pieces:
+            if not intable(piece, 16) or int(piece, 16) & ~0xffff:
+                return False
 
 def parse_cfgs()
     with open("ignore.txt") as ignore
