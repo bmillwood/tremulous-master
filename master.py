@@ -34,14 +34,19 @@ Accepted incoming messages:
         A request from the client to send the list of servers.
 """
 
-from random import choice, randint
+from errno import EINTR
+from random import choice
+from select import select, error as selecterror
+from signal import signal, SIGHUP, SIG_IGN
 from socket import (socket, error as sockerr, has_ipv6, inet_pton,
                    AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
-from select import select
 from time import time
 
 import config
 from config import log, LOG_ERROR, LOG_PRINT, LOG_VERBOSE, LOG_DEBUG
+
+signal(SIGHUP, SIG_IGN)
+
 config.parse()
 
 inSocks, outSocks = {}, {}
@@ -205,7 +210,12 @@ except sockerr, (errno, strerror):
     raise
 
 while True:
-    (ready, _, _) = select(inSocks.values() + outSocks.values(), [], [])
+    try:
+        (ready, _, _) = select(inSocks.values() + outSocks.values(), [], [])
+    except selecterror, (errno, strerror):
+        if errno == EINTR:
+            continue
+        raise
     prune_timeouts(servers)
     for sock in inSocks.values():
         if sock in ready:

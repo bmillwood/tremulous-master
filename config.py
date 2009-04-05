@@ -2,7 +2,7 @@
 # Copyright (c) Ben Millwood 2009
 # This file is part of the Tremulous Master server.
 
-from errno import ENOENT
+from errno import ENOENT, EIO
 from getopt import getopt, GetoptError
 from sys import argv, platform, stdout, stderr
 from time import strftime
@@ -50,14 +50,27 @@ def intable(arg, base = 10):
 loglevel = LOG_DEBUG
 
 def log(level, *args, **kwargs):
+    global loglevel
+
     if not args:
         raise TypeError('No log message provided')
     if level > loglevel:
         return
+
     sep = kwargs['sep'] if 'sep' in kwargs.keys() else ' '
     f = stderr if level in (LOG_ERROR, LOG_DEBUG) else stdout
 
-    f.write(strftime('[%T] ') + sep.join(map(str, args)) + '\n')
+    try:
+        f.write(strftime('[%T] ') + sep.join(map(str, args)) + '\n')
+    except IOError, (errno, strerror):
+        if errno == EIO:
+            # this happens when we lose contact with the terminal
+            # we could stop all logging at this point but it doesn't actually
+            # help a great deal...
+            #loglevel = LOG_NONE
+            pass
+        else:
+            raise
 
 disable_ipv4 = False
 disable_ipv6 = not has_ipv6
