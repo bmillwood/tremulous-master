@@ -195,7 +195,7 @@ def opt_maxservers(arg):
 challengeport_set = False
 
 def opt_port(arg):
-    global inPort
+    global inPort, outPort
     try:
         inPort = int(arg)
         if inPort & ~0xffff:
