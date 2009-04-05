@@ -133,7 +133,8 @@ def challenge():
     return ''.join([choice(valid) for _ in range(config.CHALLENGE_LENGTH)])
 
 def heartbeat(sock, addr, data):
-    if config.maxservers > 0 and len(servers) + len(pending) >= config.maxservers:
+    if (config.maxservers >= 0 and
+            len(servers) + len(pending) >= config.maxservers):
         log(LOG_VERBOSE, 'Warning: max server count exceeded, '
                          'heartbeat from {0[0]}:{0[1]} ignored'.format(addr))
         return
