@@ -2,6 +2,7 @@
 # Copyright (c) Ben Millwood 2009
 # This file is part of the Tremulous Master server.
 
+from errno import ENOENT
 from getopt import getopt, GetoptError
 from sys import argv, platform, stdout, stderr
 from time import strftime
@@ -289,11 +290,15 @@ def valid_addr(addr):
                 return False
 
 def parse_cfgs():
-    with open("ignore.txt") as ignore:
-        for line in ignore:
-            for addr in line.split():
-                if valid_addr(addr):
-                    addr_blacklist.append(addr)
+    try:
+        with open("ignore.txt") as ignore:
+            for line in ignore:
+                for addr in line.split():
+                    if valid_addr(addr):
+                        addr_blacklist.append(addr)
+    except IOError, (errno, strerror):
+        if errno != ENOENT:
+            raise
 
 def parse():
     parse_cfgs()
