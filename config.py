@@ -195,6 +195,7 @@ def opt_maxservers(arg):
 challengeport_set = False
 
 def opt_port(arg):
+    global inPort
     try:
         inPort = int(arg)
         if inPort & ~0xffff:
@@ -210,7 +211,7 @@ def opt_port(arg):
     log(LOG_VERBOSE, 'Listen port set to', inPort)
 
 def opt_challengeport(arg):
-    global challengeport_set
+    global outPort, challengeport_set
     try:
         outPort = int(arg)
         if outPort & ~0xffff:
