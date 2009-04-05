@@ -70,7 +70,7 @@ def log(level, *args, **kwargs):
 
     try:
         f = stderr if level in (LOG_ERROR, LOG_DEBUG) else stdout
-        f.write(strftime('[%T] ') + sep.join(map(str, args)) + '\n')
+        f.write(strftime('[%H:%M:%S] ') + sep.join(map(str, args)) + '\n')
     except IOError, (errno, strerror):
         if errno == EIO:
             # this happens when we lose contact with the terminal

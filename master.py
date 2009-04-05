@@ -37,15 +37,48 @@ Accepted incoming messages:
 from errno import EINTR
 from random import choice
 from select import select, error as selecterror
-from signal import signal, SIGHUP, SIG_IGN
-from socket import (socket, error as sockerr, has_ipv6, inet_pton,
+from socket import (socket, error as sockerr, has_ipv6,
                    AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
 from time import time
 
 import config
 from config import log, LOG_ERROR, LOG_PRINT, LOG_VERBOSE, LOG_DEBUG
 
-signal(SIGHUP, SIG_IGN)
+# optional imports
+try:
+    from signal import signal, SIGHUP, SIG_IGN
+    signal(SIGHUP, SIG_IGN)
+except ImportError:
+    pass
+try:
+    # I'm guessing the builtin inet_pton will be faster, but if it's not
+    # available we'll just have to use mine
+    from socket import inet_pton
+except ImportError:
+    def inet_pton(af, addr):
+        if af == AF_INET:
+            try:
+                return ''.join(map(lambda b: chr(int(b)), addr.split('.')))
+            except ValueError:
+                raise sockerr('illegal IP address string passed to inet_pton')
+        elif af == AF_INET6:
+            bits = addr.split('::')
+            if len(bits) > 2:
+                raise sockerr('illegal IP address string passed to inet_pton')
+            try:
+                if len(bits) == 2:
+                    lead, trail = map(lambda s: filter(bool, s.split(':')),
+                                      bits)
+                    full = map(lambda s: int(s, 16), lead)
+                    full += [0 for i in range(8 - len(lead) - len(trail))]
+                    full += map(lambda s: int(s, 16), trail)
+                else:
+                    full = map(lambda s: int(s, 16), addr.split(':'))
+            except ValueError:
+                raise sockerr('illegal IP address string passed to inet_pton')
+            return ''.join([chr(b >> 8) + chr(b & 0xff) for b in full])
+        else:
+            raise sockerr(97, 'Address family not supported by protocol')
 
 config.parse()
 
