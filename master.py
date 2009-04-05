@@ -245,20 +245,20 @@ def filterpacket(data, addr):
 
 try:
     if not config.disable_ipv4 and config.bindaddr:
+        log(LOG_PRINT, 'IPv4: Listening on', config.bindaddr,
+                       'port', config.inPort)
         inSocks[AF_INET] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         inSocks[AF_INET].bind((config.bindaddr, config.inPort))
         outSocks[AF_INET] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         outSocks[AF_INET].bind((config.bindaddr, config.outPort))
-        log(LOG_PRINT, 'IPv4: Listening on', config.bindaddr,
-                       'port', config.inPort)
 
     if not config.disable_ipv6 and config.bind6addr and has_ipv6:
+        log(LOG_PRINT, 'IPv6: Listening on', config.bind6addr,
+                       'port', config.inPort)
         inSocks[AF_INET6] = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
         inSocks[AF_INET6].bind((config.bind6addr, config.inPort))
         outSocks[AF_INET6] = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
         outSocks[AF_INET6].bind((config.bind6addr, config.outPort))
-        log(LOG_PRINT, 'IPv6: Listening on', config.bind6addr,
-                       'port', config.inPort)
 
     if not inSocks and not outSocks:
         log(LOG_ERROR, 'Error: Not listening on any sockets, aborting')
