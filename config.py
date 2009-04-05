@@ -12,6 +12,9 @@ no_chroot, no_setuid = True, True
 try:
     from os import chroot
     no_chroot = False
+except ImportError, ex:
+    pass
+try:
     from os import setuid, getuid
     from pwd import getpwnam
     no_setuid = False
