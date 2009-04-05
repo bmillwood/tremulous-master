@@ -226,7 +226,7 @@ def opt_version(arg):
     print_version()
     raise SystemExit(0)
 
-def parse():
+def parse_cmdline():
     try:
         opts, longopts, help = zip(*options)
         def loptstrip(s):
@@ -259,3 +259,31 @@ def parse():
         except ValueError, ex:
             log(LOG_ERROR, 'Error:', ex)
             raise SystemExit(1)
+
+def valid_addr(addr):
+    if '.' in addr:
+        # assume IPv4
+        ip, port = addr.split(':')
+        if not intable(port) or int(port) & ~0xffff:
+            return False
+        bytes = ip.split('.')
+        if len(bytes) != 4:
+            return False
+        for byte in bytes:
+            if not intable(byte) or int(byte) & ~0xff:
+                return False
+        return True
+    else:
+        # assume IPv6
+        
+
+def parse_cfgs()
+    with open("ignore.txt") as ignore
+        for line in ignore:
+            for addr in line.split():
+                if valid_addr(addr):
+                    addr_blacklist.append(addr)
+
+def parse():
+    parse_cfgs()
+    parse_cmdline()
