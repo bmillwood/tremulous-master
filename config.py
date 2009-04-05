@@ -161,6 +161,9 @@ def opt_listen6addr(arg):
 
 def opt_maxservers(arg):
     global maxservers
+    if not intable(arg):
+        log(LOG_ERROR, 'Error: max-servers option must be numeric:', arg)
+        raise SystemExit(1)
     maxservers = int(arg)
 
 challengeport_set = False
@@ -168,7 +171,7 @@ challengeport_set = False
 def opt_port(arg):
     try:
         inPort = int(arg)
-        if inPort > 0xffff:
+        if inPort & ~0xffff:
             raise ValueError
     except ValueError:
         log(LOG_ERROR, 'Invalid port number:', arg)
@@ -178,12 +181,13 @@ def opt_port(arg):
     elif inPort == outPort:
         log(LOG_PRINT, 'Warning: the challenge port should not be the same as '
                        'the listen port ({0})'.format(outPort))
+    log(LOG_VERBOSE, 'Listen port set to', inPort)
 
 def opt_challengeport(arg):
     global challengeport_set
     try:
         outPort = int(arg)
-        if outPort > 0xffff:
+        if outPort & ~0xffff:
             raise ValueError
         challengeport_set = True
     except ValueError:
@@ -192,6 +196,7 @@ def opt_challengeport(arg):
     if inPort == outPort:
         log(LOG_PRINT, 'Warning: the challenge port should not be the same as '
                        'the listen port ({0})'.format(inPort))
+    log(LOG_VERBOSE, 'Challenge port set to', outPort)
 
 def opt_user(arg):
     try:
