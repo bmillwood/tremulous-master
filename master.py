@@ -125,7 +125,7 @@ class Server(object):
             log(LOG_VERBOSE, 'Challenge response rejected: too late')
             return False
         infostring = data.split(None, 1)[1]
-        info = parseinfo(infostring)
+        info = Info(infostring)
         try:
             if info['challenge'] != self.challenge:
                 return False
@@ -141,6 +141,28 @@ class Server(object):
                        '{0[0]}:{0[1]}'.format(self.addr))
         return True
 
+class Info(dict):
+    def __init__(self, string = None, **kwargs):
+        dict.__init__(self, **kwargs)
+        if string:
+            self.parse(string)
+
+    def __str__(self):
+        # Blame #python for this one :)
+        return '\\'.join(i for it in ([['']], self.iteritems(), [['']])
+                           for t in it
+                           for i in t)
+
+    def parse(self, string):
+        string = string.strip('\\')
+        while True:
+            bits = string.split('\\', 2)
+            try:
+                self[bits[0]] = bits[1]
+                string = bits[2]
+            except IndexError:
+                break
+
 def prune_timeouts(servers):
     for addr in filter(lambda k: servers[k].timeout(), servers.keys()):
         server = servers[addr]
@@ -148,18 +170,6 @@ def prune_timeouts(servers):
                          '{1[0]}:{1[1]}'.format(time() - server.lastactive,
                                                   server.addr))
         del servers[addr]
-
-def parseinfo(infostring):
-    info = dict()
-    infostring = infostring.lstrip('\\')
-    while True:
-        bits = infostring.split('\\', 2)
-        try:
-            info[bits[0]] = bits[1]
-            infostring = bits[2]
-        except IndexError:
-            break
-    return info
 
 def challenge():
     """Returns a string of config.CHALLENGE_LENGTH characters, chosen from
