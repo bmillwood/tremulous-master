@@ -103,7 +103,9 @@ maxservers = -1
 CHALLENGE_LENGTH = 12
 CHALLENGE_TIMEOUT = 5
 SERVER_TIMEOUT = 11 * 60
-GSR_MAXLENGTH = 1400
+# src/client/cl_main.c -- MAX_SERVERSPERPACKET
+# This limit should be hit long before the overall length limit of 16384 bytes
+GSR_MAXSERVERS = 256
 
 addr_blacklist = []
 

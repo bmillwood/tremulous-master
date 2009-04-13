@@ -212,10 +212,10 @@ def getservers(sock, addr, data):
                'Ext' if ext else '')
     response = start
     end = '\\EOT\0\0\0'
-    assert config.GSR_MAXLENGTH > len(response) + len(end)
 
     log(LOG_VERBOSE, '<<', str(Server(sock, addr)) + ':', repr(data))
 
+    count = 0
     for server in servers.values():
         af = server.sock.family
         if af == AF_INET6 and not ext:
@@ -234,13 +234,14 @@ def getservers(sock, addr, data):
         sep = '/' if af == AF_INET6 else '\\'
         add = (sep + inet_pton(af, server.addr[0]) +
                chr(server.addr[1] >> 8) + chr(server.addr[1] & 0xff))
-        if len(response) + len(add) + len(end) > config.GSR_MAXLENGTH:
+        if count >= config.GSR_MAXSERVERS:
             response += end
             log(LOG_DEBUG, '>> {0[0]}:{0[1]}:'.format(addr), repr(response))
             sock.sendto(response, addr)
             response = start
         else:
             response += add
+            count += 1
     if response != start:
         assert not response.endswith(end)
         response += end
