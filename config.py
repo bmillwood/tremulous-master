@@ -202,7 +202,7 @@ for k in disables.keys():
         del options[shortopts.index(k)]
         log(LOG_DEBUG, 'Disabled option -{0}'.format(k))
 
-def print_help(f = stderr):
+def print_help(f = stdout):
     '''Prints a formatted string of options, long options, and their help
     string to the specified file, defaulting to stderr.'''
     # This function is a mess that uses zip() altogether too much
@@ -223,7 +223,7 @@ def print_help(f = stderr):
         vars['opt'], vars['longopt'], vars['help'] = option
         f.write(' {opt:{optlen}} {longopt:{longlen}} {help}\n'.format(**vars))
 
-def print_version(f = stderr):
+def print_version(f = stdout):
     '''Writes the version string to the specified file [stderr], followed by a
     newline'''
     f.write(version + '\n')
@@ -245,11 +245,9 @@ def opt_ipv6(arg):
     log(LOG_VERBOSE, 'IPv4 disabled')
 
 def opt_help(arg):
-    '''Prints the version and help to stderr, then exits with status code 0'''
-    # FIXME: should check for this first, or check for --help --listen-addr
+    '''Prints the version and help to stdout'''
     print_version()
     print_help()
-    raise SystemExit(0)
 
 def opt_jail(arg):
     '''Attempts to chroot into the given directory, exits with status code 1 in
@@ -377,8 +375,13 @@ def parse_cmdline():
             raise SystemExit(1)
     except GetoptError, ex:
         log(LOG_ERROR, 'Error:', ex)
-        print_help()
+        log(LOG_ERROR, 'Try:', argv[0], '--help')
         raise SystemExit(1)
+    # prioritise --help
+    specified = zip(*opts)[0]
+    if '-h' in specified or '--help' in specified:
+        opt_help('')
+        raise SystemExit(0)
     for (opt, val) in opts:
         if not opt.startswith('--'):
             # convert short options to long options
@@ -397,7 +400,7 @@ def parse_cmdline():
             globals()['opt_{0}'.format(opt)](val)
         except ValueError, ex:
             log(LOG_ERROR, 'Error:', ex)
-            #print_help()
+            log(LOG_ERROR, 'Try:', argv[0], '--help')
             raise SystemExit(1)
 
 def valid_addr(addr):
