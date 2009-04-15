@@ -375,10 +375,16 @@ def parse_cmdline():
         log(LOG_ERROR, 'Try:', argv[0], '--help')
         raise SystemExit(1)
     # prioritise --help
-    specified = zip(*opts)[0]
-    if '-h' in specified or '--help' in specified:
-        opt_help()
-        raise SystemExit(0)
+    try:
+        specified = zip(*opts)[0]
+        if '-h' in specified or '--help' in specified:
+            opt_help()
+            raise SystemExit(0)
+        if '-v' in specified or '--version' in specified:
+            opt_version()
+            raise SystemExit(0)
+    except IndexError:
+        pass
     for (opt, val) in opts:
         if not opt.startswith('--'):
             # convert short options to long options
