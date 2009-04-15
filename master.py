@@ -34,6 +34,7 @@ Accepted incoming messages:
         A request from the client to send the list of servers.
 """
 
+# Required imports
 from errno import EINTR
 from random import choice
 from select import select, error as selecterror
@@ -44,7 +45,7 @@ from time import time
 import config
 from config import log, LOG_ERROR, LOG_PRINT, LOG_VERBOSE, LOG_DEBUG
 
-# optional imports
+# Optional imports
 try:
     from signal import signal, SIGHUP, SIG_IGN
     signal(SIGHUP, SIG_IGN)
@@ -58,7 +59,7 @@ except ImportError:
     def inet_pton(af, addr):
         if af == AF_INET:
             try:
-                return ''.join(map(lambda b: chr(int(b)), addr.split('.')))
+                return ''.join(chr(int(b)) for b in addr.split('.'))
             except ValueError:
                 raise sockerr('illegal IP address string passed to inet_pton')
         elif af == AF_INET6:
@@ -67,13 +68,14 @@ except ImportError:
                 raise sockerr('illegal IP address string passed to inet_pton')
             try:
                 if len(bits) == 2:
-                    lead, trail = map(lambda s: filter(bool, s.split(':')),
-                                      bits)
-                    full = map(lambda s: int(s, 16), lead)
-                    full += [0 for i in range(8 - len(lead) - len(trail))]
-                    full += map(lambda s: int(s, 16), trail)
+                    # The filter(bool) replaces [''] with [] in the case that
+                    # :: begins or ends a string (so bits[i] would be empty)
+                    lead, trail = [filter(bool, s.split(':')) for s in bits]
+                    full = [int(s, 16) for s in lead]
+                    full += [0 for _ in range(8 - len(lead) - len(trail))]
+                    full += [int(s, 16) for s in trail]
                 else:
-                    full = map(lambda s: int(s, 16), addr.split(':'))
+                    full = [int(s, 16) for s in addr.split(':')]
             except ValueError:
                 raise sockerr('illegal IP address string passed to inet_pton')
             return ''.join([chr(b >> 8) + chr(b & 0xff) for b in full])
@@ -82,31 +84,43 @@ except ImportError:
 
 config.parse()
 
+# dict: socks[address_family].family == address_family
 inSocks, outSocks = {}, {}
 
+# dicts of [addr] -> Server instance
+# pending - have sent a heartbeat, but not yet responded to challenge
+# servers - have sent at least one valid challenge response
+# it is possible for a server to be in both lists
 pending = {}
 servers = {}
 
 class Server(object):
+    '''Data structure for tracking server timeouts and challenges'''
     NEW, CHALLENGED, CONFIRMED = range(3)
     def __init__(self, sock, addr):
+        '''The init method does no work, aside from setting variables: it is
+        assumed the heartbeat method will be called pretty soon afterwards'''
         self.addr = addr
         self.sock = outSocks[sock.family]
         self.state = self.NEW
         self.lastactive = 0
 
     def __str__(self):
+        '''Returns a string representing the host and port of this server'''
         return {
             AF_INET: '{0[0]}:{0[1]}',
             AF_INET6: '[{0[0]}]:{0[1]}'
         }[self.sock.family].format(self.addr)
 
     def timeout(self):
+        '''Returns True if the server has been idle for longer than the times
+        specified in the config module'''
         if self.state == self.CONFIRMED:
             return (time() - self.lastactive > config.SERVER_TIMEOUT)
         return (time() - self.lastactive > config.CHALLENGE_TIMEOUT)
 
     def heartbeat(self, data):
+        '''Sends a getinfo challenge and records the current time'''
         self.challenge = challenge()
         self.sock.sendto('\xff\xff\xff\xffgetinfo ' + self.challenge,
             self.addr)
@@ -116,10 +130,13 @@ class Server(object):
         log(LOG_VERBOSE, '>> {0[0]}:{0[1]}: getinfo'.format(self.addr))
 
     def respond(self, data):
+        '''Reads the data incoming and selects an appropriate response'''
         if data.startswith('infoResponse'):
             return self.infoResponse(data)
 
     def infoResponse(self, data):
+        '''Returns True if the info given is as complete as necessary and
+        the challenge returned matches the challenge sent'''
         if (self.state == self.CHALLENGED and
                 time() - self.challengetime > config.CHALLENGE_TIMEOUT):
             log(LOG_VERBOSE, 'Challenge response rejected: too late')
@@ -142,18 +159,28 @@ class Server(object):
         return True
 
 class Info(dict):
+    '''A dict with an overridden str() method for converting to \\key\\value\\
+    syntax, and a new parse() method for converting therefrom.'''
     def __init__(self, string = None, **kwargs):
+        '''If any keyword arguments are given, add them; if a string is given,
+        parse it.'''
         dict.__init__(self, **kwargs)
         if string:
             self.parse(string)
 
     def __str__(self):
+        '''Converts self[key1] == value1, self[key2] == value2[, ...] to
+        \\key1\\value1\\key2\\value2\\...'''
         # Blame #python for this one :)
+        # the [['']]s inexpensively tell join() to put \\ at the start and end
         return '\\'.join(i for it in ([['']], self.iteritems(), [['']])
                            for t in it
                            for i in t)
 
     def parse(self, string):
+        '''Converts \\key1\\value1\\key2\\value2\\... to self[key1] = value1,
+        self[key2] = value2[, ...].
+        Note that previous entries in self are not deleted!'''
         string = string.strip('\\')
         while True:
             bits = string.split('\\', 2)
@@ -164,26 +191,30 @@ class Info(dict):
                 break
 
 def prune_timeouts(servers):
-    for addr in filter(lambda k: servers[k].timeout(), servers.keys()):
-        server = servers[addr]
-        log(LOG_VERBOSE, 'Server dropped due to {0}s inactivity: '
-                         '{1[0]}:{1[1]}'.format(time() - server.lastactive,
-                                                  server.addr))
-        del servers[addr]
+    '''Removes from the active server list any items whose timeout method
+    returns true'''
+    for (addr, server) in servers.iteritems():
+        if server.timeout():
+            del servers[addr]
+            log(LOG_VERBOSE, 'Server dropped due to {0}s inactivity: '
+                             '{1[0]}:{1[1]}'.format(time() - server.lastactive,
+                                                      server.addr))
 
 def challenge():
-    """Returns a string of config.CHALLENGE_LENGTH characters, chosen from
+    '''Returns a string of config.CHALLENGE_LENGTH characters, chosen from
     those greater than ' ' and less than or equal to '~' (i.e. isgraph)
     Semicolons, backslashes and quotes are precluded because the server won't
     put them in an infostring; forward slashes are not allowed because the
     server's parsing tools can recognise them as comments
-    Percent symbols: these used to be disallowed, but subsequent to r1148 they
-    should be okay. Any server older than that will translate them into '.'
-    and therefore fail to match."""
+    Percent symbols: these used to be disallowed, but subsequent to Tremulous
+    SVN r1148 they should be okay. Any server older than that will translate
+    them into '.' and therefore fail to match.'''
     valid = [c for c in map(chr, range(0x21, 0x7f)) if c not in '\\;\"/']
     return ''.join([choice(valid) for _ in range(config.CHALLENGE_LENGTH)])
 
 def heartbeat(sock, addr, data):
+    '''In response to an incoming heartbeat: call its heartbeat method, and
+    add it to the pending challenge response list'''
     s = Server(sock, addr)
     log(LOG_VERBOSE, '<<', str(s) + ':', repr(data))
     if (config.maxservers >= 0 and
@@ -203,13 +234,13 @@ def getservers(sock, addr, data):
     tokens = data.split()
     ext = (tokens.pop(0) == 'getserversExt')
     if ext:
-        tokens.pop(0) # 'Tremulous'
+        if tokens.pop(0) != 'Tremulous':
+            pass # this parameter doesn't seem to affect much?
     protocol = tokens.pop(0)
-    empty = 'empty' in tokens
-    full = 'full' in tokens
+    empty, full = 'empty' in tokens, 'full' in tokens
 
     start = '\xff\xff\xff\xffgetservers{0}Response'.format(
-               'Ext' if ext else '')
+                                      'Ext' if ext else '')
     response = start
     end = '\\EOT\0\0\0'
 
@@ -249,12 +280,17 @@ def getservers(sock, addr, data):
         sock.sendto(response, addr)
 
 def filterpacket(data, addr):
+    '''Called on every incoming packet, checks if it should immediately be
+    dropped, returning the reason as a string'''
     if not data.startswith('\xff\xff\xff\xff'):
         return 'no header'
     if addr[0] in config.addr_blacklist:
         return 'blacklisted'
 
 try:
+    # FIXME: this will probably give an error if inPort == outPort
+    # this is possibly correct behaviour but should at least be caught
+    # explicitly if so
     if not config.disable_ipv4 and config.bindaddr:
         log(LOG_PRINT, 'IPv4: Listening on', config.bindaddr,
                        'ports', config.inPort, 'and', config.outPort)
@@ -283,23 +319,30 @@ while True:
     try:
         (ready, _, _) = select(inSocks.values() + outSocks.values(), [], [])
     except selecterror, (errno, strerror):
+        # select can be interrupted by a signal: if it wasn't a fatal signal,
+        # we don't care
         if errno == EINTR:
             continue
         raise
     prune_timeouts(servers)
     for sock in inSocks.values():
         if sock in ready:
+            # FIXME: 2048 magic number
             (data, addr) = sock.recvfrom(2048)
+            # for logging
             addrstr = '<< {0[0]}:{0[1]}:'.format(addr)
             res = filterpacket(data, addr)
             if res:
                 log(LOG_VERBOSE, addrstr, 'rejected ({0})'.format(res))
                 continue
-            data = data[4:]
+            data = data[4:] # skip header
             responses = [
+                # this looks like it should be a dict but since we use
+                # startswith it wouldn't really improve matters
                 ('heartbeat', heartbeat),
                 ('getservers', getservers),
                 ('getserversExt', getservers)
+                # infoResponses will arrive on an outSock
             ]
             for (name, func) in responses:
                 if data.startswith(name):
@@ -310,15 +353,20 @@ while True:
     for sock in outSocks.values():
         if sock in ready:
             (data, addr) = sock.recvfrom(2048)
+            # for logging
             addrstr = '<< {0[0]}:{0[1]}:'.format(addr)
             res = filterpacket(data, addr)
             if res:
                 log(LOG_VERBOSE, addrstr, 'rejected ({0})'.format(res))
                 continue
-            data = data[4:]
+            data = data[4:] # skip header
+            # the outSocks are for getinfo challenges, so any response should
+            # be from a server already known to us
             if addr not in pending.keys():
                 log(LOG_VERBOSE, addrstr, 'rejected (unsolicited)')
                 continue
+            # the respond method will do most of the work here: we just have to
+            # add the server to the server list
             if pending[addr].respond(data) and pending[addr] not in servers:
                 servers[addr] = pending[addr]
                 log(LOG_VERBOSE, addrstr, 'getinfoResponse confirmed')
