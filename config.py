@@ -168,8 +168,7 @@ addr_blacklist = []
 # This is a somewhat silly limitation that replaces the more natural syntax
 # -vvv for verbosity with -v 3
 # General option FIXMEs:
-# - A lot of things raise SystemExit(1) when they should raise ValueError
-# - Some pointless uses of intable()
+# - Is ValueError really appropriate for every situation?
 options = [
     ('4', 'ipv4', 'Only use IPv4'),
     ('6', 'ipv6', 'Only use IPv6'),
@@ -256,8 +255,7 @@ def opt_jail(arg):
         chroot(arg)
         log(LOG_VERBOSE, 'Successfully chrooted to', arg)
     except OSError, (errno, strerror):
-        log(LOG_ERROR, 'chroot {0}: {1}'.format(arg, strerror))
-        raise SystemExit(1)
+        raise ValueError('chroot {0}: {1}'.format(arg, strerror))
 
 def opt_listenaddr(arg):
     '''Sets the IPv4 bind address to the given argument. Invalid addresses
@@ -278,10 +276,10 @@ def opt_maxservers(arg):
     '''Tries to set the max servers option to the given argument converted to
     an integer. If conversion fails, logs an error and exits with code 1'''
     global maxservers
-    if not intable(arg):
-        log(LOG_ERROR, 'Error: max-servers option must be numeric:', arg)
-        raise SystemExit(1)
-    maxservers = int(arg)
+    try:
+        maxservers = int(arg)
+    except ValueError:
+        raise ValueError('Max servers option must be numeric: ' + arg)
 
 challengeport_set = False
 
@@ -298,8 +296,7 @@ def opt_port(arg):
         if inPort & ~0xffff:
             raise ValueError
     except ValueError:
-        log(LOG_ERROR, 'Invalid port number:', arg)
-        raise SystemExit(1)
+        raise ValueError('Invalid port number: ' + arg)
     if not challengeport_set and inPort < 0xffff:
         outPort = inPort + 1
     elif inPort == outPort:
@@ -320,8 +317,7 @@ def opt_challengeport(arg):
             raise ValueError
         challengeport_set = True
     except ValueError:
-        log(LOG_ERROR, 'Invalid challenge port number:', arg)
-        raise SystemExit(1)
+        raise ValueError('Invalid challenge port number: ' + arg)
     if inPort == outPort:
         log(LOG_PRINT, 'Warning: the challenge port should not be the same as '
                        'the listen port ({0})'.format(inPort))
@@ -333,25 +329,26 @@ def opt_user(arg):
     try:
         uid = getpwnam(arg)[2]
     except KeyError:
-        if intable(arg):
+        try:
             uid = int(arg)
-        else:
-            log(LOG_ERROR, '{0}: name not found'.format(arg))
-            raise SystemExit(1)
+        except ValueError:
+            raise ValueError('{0}: user name not found'.format(arg))
 
     try:
         setuid(uid)
         log(LOG_VERBOSE, 'UID is now', getuid())
     except OSError, (errno, strerror):
-        log(LOG_ERROR, 'setuid {0}: {1}'.format(uid, strerror))
-        raise SystemExit(1)
+        raise ValueError('setuid {0}: {1}'.format(uid, strerror))
 
 def opt_verbose(arg):
     '''Sets the log level to the specified argument, raising ValueError if it
     is not >= LOG_NONE and < LOG_LEVELS'''
     global loglevel
-    loglevel = int(arg)
-    if not LOG_NONE <= loglevel < LOG_LEVELS:
+    try:
+        loglevel = int(arg)
+        if not LOG_NONE <= loglevel < LOG_LEVELS:
+            raise ValueError
+    except ValueError:
         raise ValueError('Verbose level must be between {0} and {1}'.format(
                          LOG_NONE, LOG_LEVELS - 1))
 
