@@ -161,7 +161,9 @@ class Info(dict):
 def prune_timeouts(servers):
     '''Removes from the active server list any items whose timeout method
     returns true'''
-    for (addr, server) in servers.iteritems():
+    # list()ing this should prevent RuntimeError: dictionary changed size
+    # during iteration
+    for (addr, server) in list(servers.iteritems()):
         if server.timed_out():
             del servers[addr]
             log(LOG_VERBOSE, 'Server dropped due to {0}s inactivity: '
