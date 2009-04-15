@@ -75,6 +75,7 @@ class Server(object):
         self.addr = addr
         self.sock = outSocks[sock.family]
         self.lastactive = 0
+        self.timeout = 0
 
     def __str__(self):
         '''Returns a string representing the host and port of this server'''
