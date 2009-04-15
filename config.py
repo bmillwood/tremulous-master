@@ -228,7 +228,7 @@ def print_version(f = stdout):
     newline'''
     f.write(version + '\n')
 
-def opt_ipv4(arg):
+def opt_ipv4(arg = None):
     '''Disables IPv6, or raises ValueError if IPv4 is already disabled'''
     global disable_ipv6
     if disable_ipv4:
@@ -236,7 +236,7 @@ def opt_ipv4(arg):
     disable_ipv6 = True
     log(LOG_VERBOSE, 'IPv6 disabled')
 
-def opt_ipv6(arg):
+def opt_ipv6(arg = None):
     '''Disables IPv4, or raises ValueError if IPv6 is already disabled'''
     global disable_ipv4
     if disable_ipv6:
@@ -244,7 +244,7 @@ def opt_ipv6(arg):
     disable_ipv4 = True
     log(LOG_VERBOSE, 'IPv4 disabled')
 
-def opt_help(arg):
+def opt_help(arg = None):
     '''Prints the version and help to stdout'''
     print_version()
     print_help()
@@ -355,7 +355,7 @@ def opt_verbose(arg):
         raise ValueError('Verbose level must be between {0} and {1}'.format(
                          LOG_NONE, LOG_LEVELS - 1))
 
-def opt_version(arg):
+def opt_version(arg = None):
     '''Just print the version string and exit with code 0'''
     print_version()
     raise SystemExit(0)
@@ -380,7 +380,7 @@ def parse_cmdline():
     # prioritise --help
     specified = zip(*opts)[0]
     if '-h' in specified or '--help' in specified:
-        opt_help('')
+        opt_help()
         raise SystemExit(0)
     for (opt, val) in opts:
         if not opt.startswith('--'):
