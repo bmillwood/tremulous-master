@@ -96,13 +96,11 @@ servers = {}
 
 class Server(object):
     '''Data structure for tracking server timeouts and challenges'''
-    NEW, CHALLENGED, CONFIRMED = range(3)
     def __init__(self, sock, addr):
         '''The init method does no work, aside from setting variables: it is
         assumed the heartbeat method will be called pretty soon afterwards'''
         self.addr = addr
         self.sock = outSocks[sock.family]
-        self.state = self.NEW
         self.lastactive = 0
 
     def __str__(self):
@@ -112,21 +110,22 @@ class Server(object):
             AF_INET6: '[{0[0]}]:{0[1]}'
         }[self.sock.family].format(self.addr)
 
-    def timeout(self):
+    def set_timeout(self, value):
+        '''Sets the time after which the server will be regarded as inactive.
+        Will never shorten a server's lifespan'''
+        self.timeout = max(self.timeout, value)
+
+    def timed_out(self):
         '''Returns True if the server has been idle for longer than the times
         specified in the config module'''
-        if self.state == self.CONFIRMED:
-            return (time() - self.lastactive > config.SERVER_TIMEOUT)
-        return (time() - self.lastactive > config.CHALLENGE_TIMEOUT)
+        return time() > self.timeout
 
     def heartbeat(self, data):
         '''Sends a getinfo challenge and records the current time'''
         self.challenge = challenge()
         self.sock.sendto('\xff\xff\xff\xffgetinfo ' + self.challenge,
             self.addr)
-        if self.state == self.NEW:
-            self.challengetime = time()
-            self.state = self.CHALLENGED
+        self.set_timeout(time() + config.CHALLENGE_TIMEOUT)
         log(LOG_VERBOSE, '>> {0[0]}:{0[1]}: getinfo'.format(self.addr))
 
     def respond(self, data):
@@ -137,10 +136,6 @@ class Server(object):
     def infoResponse(self, data):
         '''Returns True if the info given is as complete as necessary and
         the challenge returned matches the challenge sent'''
-        if (self.state == self.CHALLENGED and
-                time() - self.challengetime > config.CHALLENGE_TIMEOUT):
-            log(LOG_VERBOSE, 'Challenge response rejected: too late')
-            return False
         infostring = data.split(None, 1)[1]
         info = Info(infostring)
         try:
@@ -152,8 +147,8 @@ class Server(object):
         except KeyError, ex:
             log(LOG_VERBOSE, 'Server info key missing:', ex)
             return False
-        self.state = self.CONFIRMED
         self.lastactive = time()
+        self.set_timeout(self.lastactive + config.SERVER_TIMEOUT)
         log(LOG_DEBUG, 'Last active time updated for '
                        '{0[0]}:{0[1]}'.format(self.addr))
         return True
@@ -194,11 +189,11 @@ def prune_timeouts(servers):
     '''Removes from the active server list any items whose timeout method
     returns true'''
     for (addr, server) in servers.iteritems():
-        if server.timeout():
+        if server.timed_out():
             del servers[addr]
             log(LOG_VERBOSE, 'Server dropped due to {0}s inactivity: '
                              '{1[0]}:{1[1]}'.format(time() - server.lastactive,
-                                                      server.addr))
+                                                    server.addr))
 
 def challenge():
     '''Returns a string of config.CHALLENGE_LENGTH characters, chosen from
