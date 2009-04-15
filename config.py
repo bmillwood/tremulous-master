@@ -19,10 +19,6 @@ GSR_MAXSERVERS:
 
 and some useful functions:
 
-intable(arg[, base]):
-        by calling int() and catching exceptions, determine whether or not the
-        given argument can represent an integer, e.g. intable('13') -> True,
-        intable(43.5) -> True, intable('beans') -> False
 log(level, arg[, arg...], sep = ' '):
         level may be one of LOG_ERROR, LOG_PRINT, LOG_VERBOSE, or LOG_DEBUG:
         if the user's chosen verbosity level is less, the message will not be
@@ -72,6 +68,9 @@ from getopt import getopt, GetoptError
 from sys import argv, stdout, stderr
 from time import strftime
 
+# Local imports
+from utils import inet_pton
+
 # Optional imports
 no_chroot, no_setuid = True, True
 try:
@@ -91,15 +90,6 @@ try:
     from socket import has_ipv6
 except ImportError:
     has_ipv6 = False
-
-def intable(arg, base = 10):
-    '''Tests whether arg can be inted'''
-    # this should probably go into another file
-    try:
-        int(arg, base)
-        return True
-    except:
-        return False
 
 ( # Log levels
     LOG_NONE,
@@ -406,37 +396,6 @@ def parse_cmdline():
             log(LOG_ERROR, 'Try:', argv[0], '--help')
             raise SystemExit(1)
 
-def valid_addr(addr):
-    '''Checks for a valid IPv4 or IPv6 address'''
-    # This could easily be replaced with inet_ntop or some such
-    # with exceptions caught
-    if '.' in addr:
-        # assume IPv4
-        ip, port = addr.split(':')
-        if not intable(port) or int(port) & ~0xffff:
-            return False
-        bytes = ip.split('.')
-        if len(bytes) != 4:
-            return False
-        for byte in bytes:
-            if not intable(byte) or int(byte) & ~0xff:
-                return False
-        return True
-    else:
-        # assume IPv6
-        try:
-            # check for :: appearing twice
-            addr[addr.index('::'):].index('::', 2)
-            return False
-        except ValueError:
-            pass
-        pieces = addr.split(':')
-        if len(pieces) > 8:
-            return False
-        for piece in pieces:
-            if not intable(piece, 16) or int(piece, 16) & ~0xffff:
-                return False
-
 def parse_cfgs():
     '''For each blank-separated address in ignore.txt, check if it is valid and
     if so add it to the addr_blacklist.
@@ -446,7 +405,11 @@ def parse_cfgs():
         with open("ignore.txt") as ignore:
             for line in ignore:
                 for addr in line.split():
-                    if valid_addr(addr):
+                    try:
+                        inet_pton(addr)
+                    except EnvironmentError:
+                        pass
+                    else:
                         addr_blacklist.append(addr)
     except IOError, (errno, strerror):
         if errno != ENOENT:

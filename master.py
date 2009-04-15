@@ -42,8 +42,11 @@ from socket import (socket, error as sockerr, has_ipv6,
                    AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
 from time import time
 
+# Local imports
 import config
 from config import log, LOG_ERROR, LOG_PRINT, LOG_VERBOSE, LOG_DEBUG
+# inet_pton isn't defined on windows, so use our own
+from utils import inet_pton
 
 # Optional imports
 try:
@@ -51,36 +54,6 @@ try:
     signal(SIGHUP, SIG_IGN)
 except ImportError:
     pass
-try:
-    # I'm guessing the builtin inet_pton will be faster, but if it's not
-    # available we'll just have to use mine
-    from socket import inet_pton
-except ImportError:
-    def inet_pton(af, addr):
-        if af == AF_INET:
-            try:
-                return ''.join(chr(int(b)) for b in addr.split('.'))
-            except ValueError:
-                raise sockerr('illegal IP address string passed to inet_pton')
-        elif af == AF_INET6:
-            bits = addr.split('::')
-            if len(bits) > 2:
-                raise sockerr('illegal IP address string passed to inet_pton')
-            try:
-                if len(bits) == 2:
-                    # The filter(bool) replaces [''] with [] in the case that
-                    # :: begins or ends a string (so bits[i] would be empty)
-                    lead, trail = [filter(bool, s.split(':')) for s in bits]
-                    full = [int(s, 16) for s in lead]
-                    full += [0 for _ in range(8 - len(lead) - len(trail))]
-                    full += [int(s, 16) for s in trail]
-                else:
-                    full = [int(s, 16) for s in addr.split(':')]
-            except ValueError:
-                raise sockerr('illegal IP address string passed to inet_pton')
-            return ''.join([chr(b >> 8) + chr(b & 0xff) for b in full])
-        else:
-            raise sockerr(97, 'Address family not supported by protocol')
 
 config.parse()
 
