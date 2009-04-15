@@ -215,18 +215,14 @@ def challenge():
 def heartbeat(sock, addr, data):
     '''In response to an incoming heartbeat: call its heartbeat method, and
     add it to the pending challenge response list'''
-    s = Server(sock, addr)
-    log(LOG_VERBOSE, '<<', str(s) + ':', repr(data))
     if (config.maxservers >= 0 and
             len(servers) + len(pending) >= config.maxservers):
         log(LOG_VERBOSE, 'Warning: max server count exceeded, '
                          'heartbeat from {0[0]}:{0[1]} ignored'.format(addr))
         return
-    if addr in servers.keys():
-        servers[addr].heartbeat(data)
-        pending[addr] = servers[addr]
-        return
-    s = Server(sock, addr)
+    # fetch or create a server record
+    s = servers[addr] if addr in servers.keys() else Server(sock, addr)
+    log(LOG_VERBOSE, '<< ' + str(s), repr(data), sep = ':')
     s.heartbeat(data)
     pending[addr] = s
 
