@@ -1,4 +1,5 @@
-from socket import AF_INET, AF_INET6, error as sockerr
+from socket import (AF_INET, AF_INET6, SOCK_DGRAM,
+                    error as sockerr, getaddrinfo, gaierror)
 
 try:
     # I'm guessing the builtin inet_pton will be faster, but if it's not
@@ -40,10 +41,23 @@ except ImportError:
 def valid_addr(addr, afs = (AF_INET, AF_INET6)):
     'Return the address family of the given string, or None if it is invalid'
     for af in afs:
-        assert af is not None
         try:
             inet_pton(af, addr)
             return af
         except sockerr:
             pass
     return None
+
+def parse_addrwport(addr):
+    sep = addr.rindex(':')
+    return (addr[:sep], int(addr[sep + 1:]))
+
+def stringtosockaddr(str, family = None, socktype = SOCK_DGRAM):
+    if family == None:
+        try:
+            return getaddrinfo(*parse_addrwport(str) +
+                               (AF_INET, socktype))[0][-1]
+        except gaierror:
+            return getaddrinfo(*parse_addrwport(str) +
+                               (AF_INET6, socktype))[0][-1]
+    return getaddrinfo(*parse_addrwport(str) + (family, socktype))[0][-1]
