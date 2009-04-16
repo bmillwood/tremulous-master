@@ -365,12 +365,13 @@ def parse_cmdline():
         log(LOG_ERROR, 'Try:', argv[0], '--help')
         raise SystemExit(1)
     # prioritise --help
+    # FIXME: hardcoding things is stupid.
     try:
         specified = zip(*opts)[0]
         if '-h' in specified or '--help' in specified:
             opt_help()
             raise SystemExit(0)
-        if '-v' in specified or '--version' in specified:
+        if '-V' in specified or '--version' in specified:
             opt_version()
             raise SystemExit(0)
     except IndexError:
