@@ -209,7 +209,6 @@ def getservers(sock, addr, data):
     start = '\xff\xff\xff\xffgetservers{0}Response'.format(
                                       'Ext' if ext else '')
     response = start
-    end = '\\EOT\0\0\0'
 
     log(LOG_VERBOSE, '<<', str(Server(sock, addr)) + ':', repr(data))
 
@@ -233,7 +232,7 @@ def getservers(sock, addr, data):
         add = (sep + inet_pton(af, server.addr[0]) +
                chr(server.addr[1] >> 8) + chr(server.addr[1] & 0xff))
         if count >= config.GSR_MAXSERVERS:
-            response += end
+            response += '\\'
             log(LOG_DEBUG, '>> {0[0]}:{0[1]}:'.format(addr), repr(response))
             sock.sendto(response, addr)
             response = start
