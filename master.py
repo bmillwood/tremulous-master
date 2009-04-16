@@ -240,8 +240,7 @@ def getservers(sock, addr, data):
             response += add
             count += 1
     if response != start:
-        assert not response.endswith(end)
-        response += end
+        response += '\\'
         log(LOG_DEBUG, '>> {0[0]}:{0[1]}:'.format(addr), repr(response))
         sock.sendto(response, addr)
 
