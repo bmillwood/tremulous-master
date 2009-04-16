@@ -42,6 +42,10 @@ bindaddr, bind6addr, inPort, outPort:
 maxservers:
         This defaults to unlimited but if someone finds a way to flood the
         server list it could serve as a measure to prevent excessive RAM usage.
+featured_servers:
+        This is a dict of lists - each key is a label, and its value is a list
+        of addresses. They will be sent in a separate response packet, headered
+        with the label, so that the client can display them specially.
 addr_blacklist:
         A list of addresses from which packets should be rejected, read from
         ignore.txt, one per line.
@@ -69,7 +73,7 @@ from sys import argv, stdout, stderr
 from time import strftime
 
 # Local imports
-from utils import valid_addr
+from utils import valid_addr, stringtosockaddr
 
 # Optional imports
 no_chroot, no_setuid = True, True
@@ -151,7 +155,8 @@ bind6addr = ''
 inPort = 30710
 outPort = 30711
 maxservers = -1
-addr_blacklist = []
+featured_servers = dict()
+addr_blacklist = list()
 
 # Options which can be parsed out of the command line
 # Every short option must currently have a corresponding long option.
@@ -400,14 +405,59 @@ def parse_cmdline():
 def parse_cfgs():
     '''For each blank-separated address in ignore.txt, check if it is valid and
     if so add it to the addr_blacklist.
-    A missing ignore.txt is ignored but other errors - e.g. if ignore.txt is
-    present but can't be read - are fatal.'''
+    Then read featured.conf, and for each [label] construct a list of the
+    addresses following it and set featured_servers[label] to said list.
+    A missing file is ignored but other errors - e.g. if the file is present
+    but can't be read - are fatal.'''
+    ignore_file = 'ignore.txt'
+    featured_file = 'featured.txt'
     try:
-        with open("ignore.txt") as ignore:
+        with open(ignore_file) as ignore:
+            log(LOG_DEBUG, 'Opened', ignore_file)
             for line in ignore:
                 for addr in line.split():
                     if valid_addr(addr):
                         addr_blacklist.append(addr)
+            log(LOG_VERBOSE, 'Ignoring:', addr_blacklist)
+        with open(featured_file) as featured:
+            log(LOG_DEBUG, 'Opened', featured_file)
+            label = ''
+            lineno = 0
+            for line in map(lambda l: l.rstrip(), featured):
+                lineno += 1
+                if not line or line.lstrip().startswith('#'):
+                    continue
+                if line[0].isspace():
+                    addr = line.lstrip()
+                    if not label:
+                        log(LOG_PRINT, 'Warning: unlabelled server in',
+                            featured_file)
+                        label = 'Featured Servers'
+                        featured_servers[label] = list()
+                    try:
+                        featured_servers[label].append(stringtosockaddr(addr))
+                    except EnvironmentError, err:
+                        log(LOG_ERROR, 'Error: couldn\'t convert', addr, 'to '
+                            'address format:', err)
+                        raise SystemExit(1)
+                else:
+                    if label:
+                        if not featured_servers[label]:
+                            log(LOG_PRINT, 'Warning: no servers with label',
+                                repr(label), 'in', featured_file)
+                        else:
+                            log(LOG_VERBOSE, featured_file, repr(label),
+                                featured_servers[label], sep = ': ')
+                    label = line
+                    for c in label:
+                        if c in '\\/':
+                            log(LOG_ERROR, 'Error:', featured_file, 'label',
+                                repr(label), 'contains invalid character:', c)
+                            raise SystemExit(1)
+                    featured_servers[label] = list()
+            if label:
+                log(LOG_VERBOSE, featured_file, repr(label),
+                    featured_servers[label], sep = ': ')
     except IOError, (errno, strerror):
         if errno != ENOENT:
             raise
