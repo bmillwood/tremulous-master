@@ -36,3 +36,14 @@ except ImportError:
             # I don't know why 97, I'm just copying the observed behaviour of
             # my system's inet_pton
             raise sockerr(97, 'Address family not supported by protocol')
+
+def valid_addr(addr, afs = (AF_INET, AF_INET6)):
+    'Return the address family of the given string, or None if it is invalid'
+    for af in afs:
+        assert af is not None
+        try:
+            inet_pton(af, addr)
+            return af
+        except sockerr:
+            pass
+    return None

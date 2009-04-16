@@ -69,7 +69,7 @@ from sys import argv, stdout, stderr
 from time import strftime
 
 # Local imports
-from utils import inet_pton
+from utils import valid_addr
 
 # Optional imports
 no_chroot, no_setuid = True, True
@@ -406,11 +406,7 @@ def parse_cfgs():
         with open("ignore.txt") as ignore:
             for line in ignore:
                 for addr in line.split():
-                    try:
-                        inet_pton(addr)
-                    except EnvironmentError:
-                        pass
-                    else:
+                    if valid_addr(addr):
                         addr_blacklist.append(addr)
     except IOError, (errno, strerror):
         if errno != ENOENT:
