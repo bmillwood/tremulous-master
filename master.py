@@ -210,6 +210,8 @@ def getservers(sock, addr, data):
                                       'Ext' if ext else '')
     response = start
 
+    # this is inappropriate use of the Server class
+    # maybe I need an Addr or something
     log(LOG_VERBOSE, '<<', str(Server(sock, addr)) + ':', repr(data))
 
     count = 0

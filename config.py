@@ -164,6 +164,8 @@ addr_blacklist = list()
 # -vvv for verbosity with -v 3
 # General option FIXMEs:
 # - Is ValueError really appropriate for every situation?
+# - In most cases multiple instances of an option is an error. Catch this!
+# - Most of this is actually a pile of crap. Fix this!
 options = [
     ('4', 'ipv4', 'Only use IPv4'),
     ('6', 'ipv6', 'Only use IPv6'),
@@ -403,10 +405,11 @@ def parse_cmdline():
             raise SystemExit(1)
 
 def parse_cfgs():
-    '''For each blank-separated address in ignore.txt, check if it is valid and
-    if so add it to the addr_blacklist.
-    Then read featured.conf, and for each [label] construct a list of the
-    addresses following it and set featured_servers[label] to said list.
+    '''For each space-separated address in ignore_file, check if it is valid
+    and if so add it to the addr_blacklist.
+    Then read featured_file, and for each label (starting at column 0)
+    construct a list of the (indented) addresses following it and set
+    featured_servers[label] to said list.
     A missing file is ignored but other errors - e.g. if the file is present
     but can't be read - are fatal.'''
     ignore_file = 'ignore.txt'
@@ -425,11 +428,14 @@ def parse_cfgs():
             lineno = 0
             for line in map(lambda l: l.rstrip(), featured):
                 lineno += 1
-                if not line or line.lstrip().startswith('#'):
+                # ignore blank lines and comments
+                if not line or line.isspace() or line.lstrip().startswith('#'):
                     continue
+                # indented lines are server addresses
                 if line[0].isspace():
                     addr = line.lstrip()
                     if not label:
+                        # maybe we should just bail at this point...
                         log(LOG_PRINT, 'Warning: unlabelled server in',
                             featured_file)
                         label = 'Featured Servers'
@@ -437,25 +443,32 @@ def parse_cfgs():
                     try:
                         featured_servers[label].append(stringtosockaddr(addr))
                     except EnvironmentError, err:
+                        # EnvironmentError covers socket.error and .gaierror
+                        # without having to import them
                         log(LOG_ERROR, 'Error: couldn\'t convert', addr, 'to '
                             'address format:', err)
                         raise SystemExit(1)
+                # unindented lines start a new label
                 else:
                     if label:
                         if not featured_servers[label]:
+                            # should this error be fatal?
                             log(LOG_PRINT, 'Warning: no servers with label',
                                 repr(label), 'in', featured_file)
                         else:
+                            # featured.txt: 'Label': [server1, server2, ...]
                             log(LOG_VERBOSE, featured_file, repr(label),
                                 featured_servers[label], sep = ': ')
                     label = line
                     for c in label:
+                        # slashes are field seperators in getserversExtResponse
                         if c in '\\/':
                             log(LOG_ERROR, 'Error:', featured_file, 'label',
                                 repr(label), 'contains invalid character:', c)
                             raise SystemExit(1)
                     featured_servers[label] = list()
             if label:
+                # featured.txt: 'Label': [server1, server2, ...]
                 log(LOG_VERBOSE, featured_file, repr(label),
                     featured_servers[label], sep = ': ')
     except IOError, (errno, strerror):
