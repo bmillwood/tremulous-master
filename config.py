@@ -423,6 +423,11 @@ def parse_cfgs():
                     if valid_addr(addr):
                         addr_blacklist.append(addr)
             log(LOG_VERBOSE, 'Ignoring:', addr_blacklist)
+    except IOError, (errno, strerror):
+        if errno != ENOENT:
+            raise
+
+    try:
         with open(featured_file) as featured:
             log(LOG_DEBUG, 'Opened', featured_file)
             label = ''
