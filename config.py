@@ -408,8 +408,9 @@ def parse_cfgs():
     '''For each space-separated address in ignore_file, check if it is valid
     and if so add it to the addr_blacklist.
     Then read featured_file, and for each label (starting at column 0)
-    construct a list of the (indented) addresses following it and set
-    featured_servers[label] to said list.
+    construct a dict of the (indented) addresses following it. Each dict value
+    starts off as None, to be initialised as the connections are made.
+    featured_servers[label] is set to its corresponding dict.
     A missing file is ignored but other errors - e.g. if the file is present
     but can't be read - are fatal.'''
     ignore_file = 'ignore.txt'
@@ -439,9 +440,9 @@ def parse_cfgs():
                         log(LOG_PRINT, 'Warning: unlabelled server in',
                             featured_file)
                         label = 'Featured Servers'
-                        featured_servers[label] = list()
+                        featured_servers[label] = dict()
                     try:
-                        featured_servers[label].append(stringtosockaddr(addr))
+                        featured_servers[label][stringtosockaddr(addr)] = None
                     except EnvironmentError, err:
                         # EnvironmentError covers socket.error and .gaierror
                         # without having to import them
@@ -458,7 +459,7 @@ def parse_cfgs():
                         else:
                             # featured.txt: 'Label': [server1, server2, ...]
                             log(LOG_VERBOSE, featured_file, repr(label),
-                                featured_servers[label], sep = ': ')
+                                featured_servers[label].keys(), sep = ': ')
                     label = line
                     for c in label:
                         # slashes are field seperators in getserversExtResponse
@@ -466,11 +467,11 @@ def parse_cfgs():
                             log(LOG_ERROR, 'Error:', featured_file, 'label',
                                 repr(label), 'contains invalid character:', c)
                             raise SystemExit(1)
-                    featured_servers[label] = list()
+                    featured_servers[label] = dict()
             if label:
                 # featured.txt: 'Label': [server1, server2, ...]
                 log(LOG_VERBOSE, featured_file, repr(label),
-                    featured_servers[label], sep = ': ')
+                    featured_servers[label].keys(), sep = ': ')
     except IOError, (errno, strerror):
         if errno != ENOENT:
             raise

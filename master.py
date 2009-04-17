@@ -60,8 +60,9 @@ config.parse()
 # dict: socks[address_family].family == address_family
 inSocks, outSocks = dict(), dict()
 
-# dict of [addr] -> Server instance
-servers = dict()
+# dict of [label][addr] -> Server instance
+servers = dict((label, dict()) for label in
+               config.featured_servers.keys() + [None])
 
 class Addr(tuple):
     '''Data structure for storing socket addresses, that provides a parse
@@ -187,14 +188,19 @@ class Server(object):
         self.set_timeout(self.lastactive + config.SERVER_TIMEOUT)
         return True
 
-def prune_timeouts(servers):
-    '''Removes from the active server list any items whose timeout method
-    returns true'''
+def find_featured(addr):
+    # just in case it's an Addr
+    for (label, addrs) in config.featured_servers.iteritems():
+        if addr in addrs.keys():
+            return label
+
+def prune_timeouts(slist = servers[None]):
+    '''Removes from the list any items whose timeout method returns true'''
     # list()ing this should prevent RuntimeError: dictionary changed size
     # during iteration
-    for (addr, server) in list(servers.iteritems()):
+    for (addr, server) in list(slist.iteritems()):
         if server.timed_out():
-            del servers[addr]
+            del slist[addr]
             log(LOG_VERBOSE, 'Server dropped due to {0}s inactivity: '
                              '{1}'.format(time() - server.lastactive, server))
 
@@ -210,21 +216,38 @@ def challenge():
     valid = [c for c in map(chr, range(0x21, 0x7f)) if c not in '\\;\"/']
     return ''.join([choice(valid) for _ in range(config.CHALLENGE_LENGTH)])
 
+def count_servers(slist = servers):
+    return sum(len(d) for d in servers.values())
+
 def heartbeat(sock, addr, data):
     '''In response to an incoming heartbeat: call its heartbeat method, and
     add it to the list'''
-    if config.maxservers >= 0 and len(servers) >= config.maxservers:
+    if config.maxservers >= 0 and count_servers() >= config.maxservers:
         log(LOG_VERBOSE, 'Warning: max server count exceeded, '
                          'heartbeat from', addr, 'ignored')
         return
     # fetch or create a server record
-    akey = addr.addr
-    s = servers[akey] if akey in servers.keys() else Server(addr)
+    label = find_featured(addr)
+    s = servers[label][addr] if addr in servers[label].keys() else Server(addr)
     log(LOG_VERBOSE, '<< {0}: {1!r}'.format(s, data))
     s.heartbeat(data)
-    servers[akey] = s
+    servers[label][addr] = s
+
+def filterservers(slist, ext, protocol, empty, full):
+    '''Return those servers in slist that test true (have been verified) and:
+    - whose protocol matches `protocol'
+    - if `ext' is not set, are IPv4
+    - if `empty' is not set, are not empty
+    - if `full' is not set, are not full'''
+    return [s for s in slist if s
+            and (ext or s.addr.family == AF_INET)
+            and not s.timed_out()
+            and s.protocol == protocol
+            and (empty or not s.empty)
+            and (full  or not s.full)]
 
 def getservers(sock, addr, data):
+    '''On a getservers or getserversExt, construct and send a response'''
     log(LOG_VERBOSE, '<< {0}: {1!r}'.format(addr, data))
 
     tokens = data.split()
@@ -235,44 +258,42 @@ def getservers(sock, addr, data):
     protocol = tokens.pop(0)
     empty, full = 'empty' in tokens, 'full' in tokens
 
+    # do a pass to work out how many packets are needed
+    numpackets = 0
+    for label in servers.keys():
+        max = config.GSR_MAXSERVERS
+        filtered = filterservers(servers[label].values(),
+                                 ext, protocol, empty, full)
+        numpackets += (len(filtered) + max - 1) // max;
+
     start = '\xff\xff\xff\xffgetservers{0}Response'.format(
                                       'Ext' if ext else '')
-    response = start
 
-    count = 0
-    for server in servers.values():
-        if not server:
-            log(LOG_DEBUG, 'Dropping', server, 'unconfirmed', sep = ': ')
-            continue
-        af = server.sock.family
-        if af == AF_INET6 and not ext:
-            log(LOG_DEBUG, 'Dropping', server, 'IPv6 and not ext', sep = ': ')
-            continue
-        if server.protocol != protocol:
-            log(LOG_DEBUG, 'Dropping {0}: wrong protocol ({1} != {2})'.format(
-                            server, server.protocol, protocol))
-            continue
-        if server.empty and not empty:
-            log(LOG_DEBUG, 'Dropping', server, 'empty', sep = ': ')
-            continue
-        if server.full and not full:
-            log(LOG_DEBUG, 'Dropping', server, 'full', sep = ': ')
-            continue
-        sep = '/' if af == AF_INET6 else '\\'
-        add = (sep + inet_pton(af, server.addr[0]) +
-               chr(server.addr[1] >> 8) + chr(server.addr[1] & 0xff))
-        if count >= config.GSR_MAXSERVERS:
-            response += '\\'
-            log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, response))
-            sock.sendto(response, addr)
-            response = start
-        else:
-            response += add
+    index = 1
+    for label in servers.keys():
+        filtered = filterservers(servers[label].values(),
+                                 ext, protocol, empty, full)
+        packet = '{start}\0{index}\0{numpackets}\0{label}'.format(**locals())
+        count = 0
+        for server in filtered:
+            sep = '\\' if server.addr.family == AF_INET else '/'
+            packed = inet_pton(server.addr.family, server.addr.host)
+            packed += chr(server.addr.port >> 8) + chr(server.addr.port & 0xff)
+            packet += sep + packed
             count += 1
-    if response != start:
-        response += '\\'
-        log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, response))
-        sock.sendto(response, addr)
+            if count >= config.GSR_MAXSERVERS:
+                packet += '\\'
+                log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, packet))
+                sock.sendto(packet, addr)
+                count = 0
+                index += 1
+                packet = '{start}\0{index}\0{numpackets}\0{label}'\
+                         ''.format(**locals())
+        if count:
+            packet += '\\'
+            log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, packet))
+            sock.sendto(packet, addr)
+            index += 1
 
 def filterpacket(data, addr):
     '''Called on every incoming packet, checks if it should immediately be
@@ -319,7 +340,7 @@ while True:
         if errno == EINTR:
             continue
         raise
-    prune_timeouts(servers)
+    prune_timeouts()
     for sock in inSocks.values():
         if sock in ready:
             # FIXME: 2048 magic number
@@ -359,11 +380,12 @@ while True:
             data = data[4:] # skip header
             # the outSocks are for getinfo challenges, so any response should
             # be from a server already known to us
-            if addr not in servers.keys():
+            label = find_featured(addr)
+            if label is None and addr not in servers[None].keys():
                 log(LOG_VERBOSE, addrstr, 'rejected (unsolicited)')
                 continue
             # this has got to be an infoResponse, right?
-            if servers[addr].infoResponse(data):
+            if servers[label][addr].infoResponse(data):
                 log(LOG_VERBOSE, addrstr, 'getinfoResponse confirmed')
-            else:
-                del servers[addr]
+            elif label is None:
+                del servers[None][addr]
