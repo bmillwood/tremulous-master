@@ -275,7 +275,9 @@ def getservers(sock, addr, data):
                                  ext, protocol, empty, full)
         if label is None:
             label = ''
-        packet = '{start}\0{index}\0{numpackets}\0{label}'.format(**locals())
+        packet = start
+        if ext:
+            packet += '\0{index}\0{numpackets}\0{label}'.format(**locals())
         count = 0
         for server in filtered:
             sep = '\\' if server.addr.family == AF_INET else '/'
@@ -289,8 +291,10 @@ def getservers(sock, addr, data):
                 sock.sendto(packet, addr)
                 count = 0
                 index += 1
-                packet = '{start}\0{index}\0{numpackets}\0{label}'\
-                         ''.format(**locals())
+                packet = start
+                if ext:
+                    packet += '\0{index}\0{numpackets}\0{label}'.format(
+                              **locals())
         if count:
             packet += '\\'
             log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, packet))
