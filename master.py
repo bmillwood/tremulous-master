@@ -273,6 +273,8 @@ def getservers(sock, addr, data):
     for label in servers.keys():
         filtered = filterservers(servers[label].values(),
                                  ext, protocol, empty, full)
+        if label is None:
+            label = ''
         packet = '{start}\0{index}\0{numpackets}\0{label}'.format(**locals())
         count = 0
         for server in filtered:
