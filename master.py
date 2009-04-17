@@ -63,67 +63,39 @@ inSocks, outSocks = dict(), dict()
 # dict of [addr] -> Server instance
 servers = dict()
 
-class Server(object):
-    '''Data structure for tracking server timeouts and challenges'''
-    def __init__(self, sock, addr):
-        '''The init method does no work, aside from setting variables: it is
-        assumed the heartbeat method will be called pretty soon afterwards'''
-        self.addr = addr
-        self.sock = outSocks[sock.family]
-        self.lastactive = 0
-        self.timeout = 0
+class Addr(tuple):
+    '''Data structure for storing socket addresses, that provides a parse
+    method and a nice string representation'''
+    def __new__(cls, addr = None, family = None):
+        '''This is necessary because tuple is an immutable data type, so
+        inheritance rules are a bit funny.'''
+        # I have some idea I should be using super() here
+        return tuple.__new__(cls, addr)
 
-    def __nonzero__(self):
-        '''Server has replied to a challenge'''
-        return bool(self.lastactive)
+    def __init__(self, addr = None, family = None):
+        '''Adds the host, port and family attributes to the addr tuple.
+        If no arguments are given, does nothing (assumes you're going to call
+        parse() or similar)'''
+        if addr is not None:
+            if family is None:
+                raise TypeError('Must give Addr either zero arguments or two')
+            self.host, self.port = addr[:2]
+            self.family = family
+
+    def parse(self, string):
+        '''Initialise and return self with the given string'''
+        af = valid_addr(string)
+        self.__init__(stringtosockaddr(string, af), af)
+        return self
 
     def __str__(self):
-        '''Returns a string representing the host and port of this server'''
-        return {
-            AF_INET: '{0[0]}:{0[1]}',
-            AF_INET6: '[{0[0]}]:{0[1]}'
-        }[self.sock.family].format(self.addr)
-
-    def set_timeout(self, value):
-        '''Sets the time after which the server will be regarded as inactive.
-        Will never shorten a server's lifespan'''
-        self.timeout = max(self.timeout, value)
-
-    def timed_out(self):
-        '''Returns True if the server has been idle for longer than the times
-        specified in the config module'''
-        return time() > self.timeout
-
-    def heartbeat(self, data):
-        '''Sends a getinfo challenge and records the current time'''
-        self.challenge = challenge()
-        self.sock.sendto('\xff\xff\xff\xffgetinfo ' + self.challenge,
-            self.addr)
-        self.set_timeout(time() + config.CHALLENGE_TIMEOUT)
-        log(LOG_VERBOSE, '>> {0[0]}:{0[1]}: getinfo'.format(self.addr))
-
-    def infoResponse(self, data):
-        '''Returns True if the info given is as complete as necessary and
-        the challenge returned matches the challenge sent'''
-        if not data.startswith('infoResponse'):
-            log(LOG_VERBOSE, 'unexpected packet on challenge socket:', data)
-            return False
-        infostring = data.split(None, 1)[1]
-        info = Info(infostring)
         try:
-            if info['challenge'] != self.challenge:
-                log(LOG_VERBOSE, self, 'mismatched challenge', sep = ': ')
-                return False
-            self.protocol = info['protocol']
-            self.empty = (info['clients'] == '0')
-            self.full = (info['clients'] == info['sv_maxclients'])
-        except KeyError, ex:
-            log(LOG_VERBOSE, self, 'info key missing', ex, sep = ': ')
-            return False
-        self.lastactive = time()
-        self.set_timeout(self.lastactive + config.SERVER_TIMEOUT)
-        log(LOG_DEBUG, 'Last active time updated for', self)
-        return True
+            return {
+                AF_INET: '{0[0]}:{0[1]}',
+                AF_INET6: '[{0[0]}]:{0[1]}'
+            }[self.family].format(self)
+        except (AttributeError, IndexError):
+            return tuple.__str__(self)
 
 class Info(dict):
     '''A dict with an overridden str() method for converting to \\key\\value\\
@@ -157,6 +129,64 @@ class Info(dict):
             except IndexError:
                 break
 
+class Server(object):
+    '''Data structure for tracking server timeouts and challenges'''
+    def __init__(self, addr):
+        '''The init method does no work, aside from setting variables: it is
+        assumed the heartbeat method will be called pretty soon afterwards'''
+        self.addr = addr
+        self.sock = outSocks[addr.family]
+        self.lastactive = 0
+        self.timeout = 0
+
+    def __nonzero__(self):
+        '''Server has replied to a challenge'''
+        return bool(self.lastactive)
+
+    def __str__(self):
+        '''Returns a string representing the host and port of this server'''
+        return str(self.addr)
+
+    def set_timeout(self, value):
+        '''Sets the time after which the server will be regarded as inactive.
+        Will never shorten a server's lifespan'''
+        self.timeout = max(self.timeout, value)
+
+    def timed_out(self):
+        '''Returns True if the server has been idle for longer than the times
+        specified in the config module'''
+        return time() > self.timeout
+
+    def heartbeat(self, data):
+        '''Sends a getinfo challenge and records the current time'''
+        self.challenge = challenge()
+        self.sock.sendto('\xff\xff\xff\xffgetinfo ' + self.challenge,
+            self.addr)
+        self.set_timeout(time() + config.CHALLENGE_TIMEOUT)
+        log(LOG_VERBOSE, '>> {0}: getinfo'.format(self.addr))
+
+    def infoResponse(self, data):
+        '''Returns True if the info given is as complete as necessary and
+        the challenge returned matches the challenge sent'''
+        if not data.startswith('infoResponse'):
+            log(LOG_VERBOSE, 'unexpected packet on challenge socket:', data)
+            return False
+        infostring = data.split(None, 1)[1]
+        info = Info(infostring)
+        try:
+            if info['challenge'] != self.challenge:
+                log(LOG_VERBOSE, self, 'mismatched challenge', sep = ': ')
+                return False
+            self.protocol = info['protocol']
+            self.empty = (info['clients'] == '0')
+            self.full = (info['clients'] == info['sv_maxclients'])
+        except KeyError, ex:
+            log(LOG_VERBOSE, self, 'info key missing', ex, sep = ': ')
+            return False
+        self.lastactive = time()
+        self.set_timeout(self.lastactive + config.SERVER_TIMEOUT)
+        return True
+
 def prune_timeouts(servers):
     '''Removes from the active server list any items whose timeout method
     returns true'''
@@ -166,8 +196,7 @@ def prune_timeouts(servers):
         if server.timed_out():
             del servers[addr]
             log(LOG_VERBOSE, 'Server dropped due to {0}s inactivity: '
-                             '{1[0]}:{1[1]}'.format(time() - server.lastactive,
-                                                    server.addr))
+                             '{1}'.format(time() - server.lastactive, server))
 
 def challenge():
     '''Returns a string of config.CHALLENGE_LENGTH characters, chosen from
@@ -186,15 +215,18 @@ def heartbeat(sock, addr, data):
     add it to the list'''
     if config.maxservers >= 0 and len(servers) >= config.maxservers:
         log(LOG_VERBOSE, 'Warning: max server count exceeded, '
-                         'heartbeat from {0[0]}:{0[1]} ignored'.format(addr))
+                         'heartbeat from', addr, 'ignored')
         return
     # fetch or create a server record
-    s = servers[addr] if addr in servers.keys() else Server(sock, addr)
-    log(LOG_VERBOSE, '<< ' + str(s), repr(data), sep = ':')
+    akey = addr.addr
+    s = servers[akey] if akey in servers.keys() else Server(addr)
+    log(LOG_VERBOSE, '<< {0}: {1!r}'.format(s, data))
     s.heartbeat(data)
-    servers[addr] = s
+    servers[akey] = s
 
 def getservers(sock, addr, data):
+    log(LOG_VERBOSE, '<< {0}: {1!r}'.format(addr, data))
+
     tokens = data.split()
     ext = (tokens.pop(0) == 'getserversExt')
     if ext:
@@ -206,10 +238,6 @@ def getservers(sock, addr, data):
     start = '\xff\xff\xff\xffgetservers{0}Response'.format(
                                       'Ext' if ext else '')
     response = start
-
-    # this is inappropriate use of the Server class
-    # maybe I need an Addr or something
-    log(LOG_VERBOSE, '<<', str(Server(sock, addr)) + ':', repr(data))
 
     count = 0
     for server in servers.values():
@@ -235,7 +263,7 @@ def getservers(sock, addr, data):
                chr(server.addr[1] >> 8) + chr(server.addr[1] & 0xff))
         if count >= config.GSR_MAXSERVERS:
             response += '\\'
-            log(LOG_DEBUG, '>> {0[0]}:{0[1]}:'.format(addr), repr(response))
+            log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, response))
             sock.sendto(response, addr)
             response = start
         else:
@@ -243,7 +271,7 @@ def getservers(sock, addr, data):
             count += 1
     if response != start:
         response += '\\'
-        log(LOG_DEBUG, '>> {0[0]}:{0[1]}:'.format(addr), repr(response))
+        log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, response))
         sock.sendto(response, addr)
 
 def filterpacket(data, addr):
@@ -251,7 +279,7 @@ def filterpacket(data, addr):
     dropped, returning the reason as a string'''
     if not data.startswith('\xff\xff\xff\xff'):
         return 'no header'
-    if addr[0] in config.addr_blacklist:
+    if addr.host in config.addr_blacklist:
         return 'blacklisted'
 
 try:
@@ -296,9 +324,10 @@ while True:
         if sock in ready:
             # FIXME: 2048 magic number
             (data, addr) = sock.recvfrom(2048)
+            saddr = Addr(addr, sock.family)
             # for logging
-            addrstr = '<< {0[0]}:{0[1]}:'.format(addr)
-            res = filterpacket(data, addr)
+            addrstr = '<< {0}:'.format(saddr)
+            res = filterpacket(data, saddr)
             if res:
                 log(LOG_VERBOSE, addrstr, 'rejected ({0})'.format(res))
                 continue
@@ -313,16 +342,17 @@ while True:
             ]
             for (name, func) in responses:
                 if data.startswith(name):
-                    func(sock, addr, data)
+                    func(sock, saddr, data)
                     break
             else:
                 log(LOG_VERBOSE, addrstr, 'unrecognised content:', repr(data))
     for sock in outSocks.values():
         if sock in ready:
             (data, addr) = sock.recvfrom(2048)
+            saddr = Addr(addr, sock.family)
             # for logging
-            addrstr = '<< {0[0]}:{0[1]}:'.format(addr)
-            res = filterpacket(data, addr)
+            addrstr = '<< {0}:'.format(saddr)
+            res = filterpacket(data, saddr)
             if res:
                 log(LOG_VERBOSE, addrstr, 'rejected ({0})'.format(res))
                 continue
