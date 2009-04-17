@@ -102,29 +102,27 @@ class Server(object):
         self.set_timeout(time() + config.CHALLENGE_TIMEOUT)
         log(LOG_VERBOSE, '>> {0[0]}:{0[1]}: getinfo'.format(self.addr))
 
-    def respond(self, data):
-        '''Reads the data incoming and selects an appropriate response'''
-        if data.startswith('infoResponse'):
-            return self.infoResponse(data)
-
     def infoResponse(self, data):
         '''Returns True if the info given is as complete as necessary and
         the challenge returned matches the challenge sent'''
+        if not data.startswith('infoResponse'):
+            log(LOG_VERBOSE, 'unexpected packet on challenge socket:', data)
+            return False
         infostring = data.split(None, 1)[1]
         info = Info(infostring)
         try:
             if info['challenge'] != self.challenge:
+                log(LOG_VERBOSE, self, 'mismatched challenge', sep = ': ')
                 return False
             self.protocol = info['protocol']
             self.empty = (info['clients'] == '0')
             self.full = (info['clients'] == info['sv_maxclients'])
         except KeyError, ex:
-            log(LOG_VERBOSE, 'Server info key missing:', ex)
+            log(LOG_VERBOSE, self, 'info key missing', ex, sep = ': ')
             return False
         self.lastactive = time()
         self.set_timeout(self.lastactive + config.SERVER_TIMEOUT)
-        log(LOG_DEBUG, 'Last active time updated for '
-                       '{0[0]}:{0[1]}'.format(self.addr))
+        log(LOG_DEBUG, 'Last active time updated for', self)
         return True
 
 class Info(dict):
@@ -334,9 +332,8 @@ while True:
             if addr not in servers.keys():
                 log(LOG_VERBOSE, addrstr, 'rejected (unsolicited)')
                 continue
-            # the respond method will do most of the work here: we just have to
-            # add the server to the server list
-            if servers[addr].respond(data):
+            # this has got to be an infoResponse, right?
+            if servers[addr].infoResponse(data):
                 log(LOG_VERBOSE, addrstr, 'getinfoResponse confirmed')
             else:
                 del servers[addr]
