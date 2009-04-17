@@ -60,11 +60,7 @@ config.parse()
 # dict: socks[address_family].family == address_family
 inSocks, outSocks = {}, {}
 
-# dicts of [addr] -> Server instance
-# pending - have sent a heartbeat, but not yet responded to challenge
-# servers - have sent at least one valid challenge response
-# it is possible for a server to be in both lists
-pending = {}
+# dict of [addr] -> Server instance
 servers = {}
 
 class Server(object):
@@ -76,6 +72,10 @@ class Server(object):
         self.sock = outSocks[sock.family]
         self.lastactive = 0
         self.timeout = 0
+
+    def __nonzero__(self):
+        '''Server has replied to a challenge'''
+        return bool(self.lastactive)
 
     def __str__(self):
         '''Returns a string representing the host and port of this server'''
@@ -185,9 +185,8 @@ def challenge():
 
 def heartbeat(sock, addr, data):
     '''In response to an incoming heartbeat: call its heartbeat method, and
-    add it to the pending challenge response list'''
-    if (config.maxservers >= 0 and
-            len(servers) + len(pending) >= config.maxservers):
+    add it to the list'''
+    if config.maxservers >= 0 and len(servers) >= config.maxservers:
         log(LOG_VERBOSE, 'Warning: max server count exceeded, '
                          'heartbeat from {0[0]}:{0[1]} ignored'.format(addr))
         return
@@ -195,7 +194,7 @@ def heartbeat(sock, addr, data):
     s = servers[addr] if addr in servers.keys() else Server(sock, addr)
     log(LOG_VERBOSE, '<< ' + str(s), repr(data), sep = ':')
     s.heartbeat(data)
-    pending[addr] = s
+    servers[addr] = s
 
 def getservers(sock, addr, data):
     tokens = data.split()
@@ -216,6 +215,9 @@ def getservers(sock, addr, data):
 
     count = 0
     for server in servers.values():
+        if not server:
+            log(LOG_DEBUG, 'Dropping', server, 'unconfirmed', sep = ': ')
+            continue
         af = server.sock.family
         if af == AF_INET6 and not ext:
             log(LOG_DEBUG, 'Dropping', server, 'IPv6 and not ext', sep = ': ')
@@ -329,12 +331,12 @@ while True:
             data = data[4:] # skip header
             # the outSocks are for getinfo challenges, so any response should
             # be from a server already known to us
-            if addr not in pending.keys():
+            if addr not in servers.keys():
                 log(LOG_VERBOSE, addrstr, 'rejected (unsolicited)')
                 continue
             # the respond method will do most of the work here: we just have to
             # add the server to the server list
-            if pending[addr].respond(data) and pending[addr] not in servers:
-                servers[addr] = pending[addr]
+            if servers[addr].respond(data):
                 log(LOG_VERBOSE, addrstr, 'getinfoResponse confirmed')
-            del pending[addr]
+            else:
+                del servers[addr]
