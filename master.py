@@ -58,10 +58,10 @@ except ImportError:
 config.parse()
 
 # dict: socks[address_family].family == address_family
-inSocks, outSocks = {}, {}
+inSocks, outSocks = dict(), dict()
 
 # dict of [addr] -> Server instance
-servers = {}
+servers = dict()
 
 class Server(object):
     '''Data structure for tracking server timeouts and challenges'''
