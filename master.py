@@ -258,9 +258,9 @@ def getservers(sock, addr, data):
     protocol = tokens.pop(0)
     empty, full = 'empty' in tokens, 'full' in tokens
     if ext:
-        family = AF_INET if 'ipv4' in tokens
-          else (AF_INET6 if 'ipv6' in tokens
-          else AF_UNSPEC)
+        family = (AF_INET if 'ipv4' in tokens
+           else (AF_INET6 if 'ipv6' in tokens
+           else AF_UNSPEC))
     else:
         family = AF_INET
 
