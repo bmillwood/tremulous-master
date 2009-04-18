@@ -39,7 +39,7 @@ from errno import EINTR
 from random import choice
 from select import select, error as selecterror
 from socket import (socket, error as sockerr, has_ipv6,
-                   AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
+                   AF_UNSPEC, AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
 from time import time
 
 # Local imports
@@ -233,14 +233,14 @@ def heartbeat(sock, addr, data):
     s.heartbeat(data)
     servers[label][addr] = s
 
-def filterservers(slist, ext, protocol, empty, full):
+def filterservers(slist, af, protocol, empty, full):
     '''Return those servers in slist that test true (have been verified) and:
     - whose protocol matches `protocol'
     - if `ext' is not set, are IPv4
     - if `empty' is not set, are not empty
     - if `full' is not set, are not full'''
     return [s for s in slist if s
-            and (ext or s.addr.family == AF_INET)
+            and af in (AF_UNSPEC, s.addr.family)
             and not s.timed_out()
             and s.protocol == protocol
             and (empty or not s.empty)
@@ -257,13 +257,19 @@ def getservers(sock, addr, data):
             pass # this parameter doesn't seem to affect much?
     protocol = tokens.pop(0)
     empty, full = 'empty' in tokens, 'full' in tokens
+    if ext:
+        family = AF_INET if 'ipv4' in tokens
+          else (AF_INET6 if 'ipv6' in tokens
+          else AF_UNSPEC)
+    else:
+        family = AF_INET
 
     # do a pass to work out how many packets are needed
     numpackets = 0
     for label in servers.keys():
         max = config.GSR_MAXSERVERS
         filtered = filterservers(servers[label].values(),
-                                 ext, protocol, empty, full)
+                                 family, protocol, empty, full)
         numpackets += (len(filtered) + max - 1) // max;
 
     start = '\xff\xff\xff\xffgetservers{0}Response'.format(
@@ -272,7 +278,7 @@ def getservers(sock, addr, data):
     index = 1
     for label in servers.keys():
         filtered = filterservers(servers[label].values(),
-                                 ext, protocol, empty, full)
+                                 family, protocol, empty, full)
         if label is None:
             label = ''
         packet = start
