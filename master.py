@@ -276,7 +276,7 @@ def getservers(sock, addr, data):
                                       'Ext' if ext else '')
     if numpackets == 0:
         # empty response
-        socket.sendto(start + '\\', addr)
+        sock.sendto(start + '\\', addr)
         return
 
     index = 1
