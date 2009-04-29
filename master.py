@@ -274,6 +274,10 @@ def getservers(sock, addr, data):
 
     start = '\xff\xff\xff\xffgetservers{0}Response'.format(
                                       'Ext' if ext else '')
+    if numpackets == 0:
+        # empty response
+        socket.sendto(start + '\\', addr)
+        return
 
     index = 1
     for label in servers.keys():
