@@ -117,16 +117,16 @@ class Info(dict):
                            for t in it
                            for i in t)
 
-    def parse(self, string):
+    def parse(self, input):
         '''Converts \\key1\\value1\\key2\\value2\\... to self[key1] = value1,
         self[key2] = value2[, ...].
         Note that previous entries in self are not deleted!'''
-        string = string.strip('\\')
+        input = input.strip('\\')
         while True:
-            bits = string.split('\\', 2)
+            bits = input.split('\\', 2)
             try:
                 self[bits[0]] = bits[1]
-                string = bits[2]
+                input = bits[2]
             except IndexError:
                 break
 
