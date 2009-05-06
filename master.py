@@ -172,7 +172,16 @@ class Server(object):
         if not data.startswith('infoResponse'):
             log(LOG_VERBOSE, 'unexpected packet on challenge socket:', data)
             return False
-        infostring = data.split(None, 1)[1]
+        # this is hurried to fix a crash, do it properly when there's time
+        i = 1
+        for c in data:
+            if c in ' \\\n':
+                break
+            i += 1
+        infostring = data[i:]
+        if not infostring:
+            log(LOG_VERBOSE, 'no infostring found')
+            return False
         info = Info(infostring)
         try:
             if info['challenge'] != self.challenge:
@@ -212,8 +221,10 @@ def challenge():
     server's parsing tools can recognise them as comments
     Percent symbols: these used to be disallowed, but subsequent to Tremulous
     SVN r1148 they should be okay. Any server older than that will translate
-    them into '.' and therefore fail to match.'''
-    valid = [c for c in map(chr, range(0x21, 0x7f)) if c not in '\\;\"/']
+    them into '.' and therefore fail to match.
+    For compatibility testing purposes, I've temporarily disallowed them again.
+    '''
+    valid = [c for c in map(chr, range(0x21, 0x7f)) if c not in '\\;%\"/']
     return ''.join([choice(valid) for _ in range(config.CHALLENGE_LENGTH)])
 
 def count_servers(slist = servers):
