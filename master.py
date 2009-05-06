@@ -54,6 +54,11 @@ try:
     signal(SIGHUP, SIG_IGN)
 except ImportError:
     pass
+try:
+    from db import log_client
+except ImportError:
+    def log_client(*args):
+        log(LOG_DEBUG, 'No database available, not logged:', args)
 
 config.parse()
 
@@ -82,6 +87,8 @@ class Addr(tuple):
                 raise TypeError('Must give Addr either zero arguments or two')
             self.host, self.port = addr[:2]
             self.family = family
+        else:
+            assert family is None
 
     def parse(self, string):
         '''Initialise and return self with the given string'''
@@ -257,6 +264,23 @@ def filterservers(slist, af, protocol, empty, full):
             and (empty or not s.empty)
             and (full  or not s.full)]
 
+def getmotd(sock, addr, data):
+    log(LOG_DEBUG, '<< {0}: {1!r}'.format(addr, data))
+    cmd, infostr = data.split('\\', 1)
+    info = Info(infostr)
+    rinfo = Info()
+    log_client(addr, info)
+    try:
+        rinfo['challenge'] = info['challenge']
+    except KeyError:
+        log(LOG_VERBOSE, addr, 'Challenge missing or invalid', sep = ': ')
+    rinfo['motd'] = config.getmotd()
+    if not rinfo['motd']:
+        return # don't bother responding
+    response = '\xff\xff\xff\xffmotd {0}'.format(rinfo)
+    log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, response))
+    sock.sendto(response, addr)
+
 def getservers(sock, addr, data):
     '''On a getservers or getserversExt, construct and send a response'''
     log(LOG_VERBOSE, '<< {0}: {1!r}'.format(addr, data))
@@ -356,7 +380,7 @@ try:
 
 except sockerr, (errno, strerror):
     log(LOG_ERROR, 'Couldn\'t initialise sockets:', strerror)
-    raise
+    raise SystemExit(1)
 
 while True:
     try:
@@ -385,7 +409,8 @@ while True:
                 # startswith it wouldn't really improve matters
                 ('heartbeat', heartbeat),
                 ('getservers', getservers),
-                ('getserversExt', getservers)
+                ('getserversExt', getservers),
+                ('getmotd', getmotd)
                 # infoResponses will arrive on an outSock
             ]
             for (name, func) in responses:

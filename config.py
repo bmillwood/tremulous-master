@@ -25,6 +25,10 @@ log(level, arg[, arg...], sep = ' '):
         printed. All the subsequent arguments will be str()'d and printed,
         preceded by a timestamp and joined by the string given in the keyword
         argument `sep' (default ' ')
+getmotd():
+        Simply reads the motd file and returns the result. This is a function
+        and not cached so that the message can be changed without restarting
+        the master (and in future it could be random or generated)
 
 After its parse() function is called, it uses the command line options and some
 configuration files to set the following module variables:
@@ -157,6 +161,16 @@ outPort = 30711
 maxservers = -1
 featured_servers = dict()
 addr_blacklist = list()
+
+def getmotd():
+    '''Reads the motd file and returns the contents'''
+    motd_file = 'motd.txt'
+    try:
+        with open(motd_file) as motd:
+            return motd.read() # FIXME: validate as an info parameter
+    except IOError, (errno, strerror):
+        if errno != ENOENT:
+            raise
 
 # Options which can be parsed out of the command line
 # Every short option must currently have a corresponding long option.
