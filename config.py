@@ -80,18 +80,16 @@ from time import strftime
 from utils import valid_addr, stringtosockaddr
 
 # Optional imports
-no_chroot, no_setuid = True, True
+no_chroot, no_setuid = False, False
 try:
     from os import chroot
-    no_chroot = False
-except ImportError, ex:
-    pass
+except ImportError:
+    no_chroot = True
 try:
     from os import setuid, getuid
     from pwd import getpwnam
-    no_setuid = False
-except ImportError, ex:
-    pass
+except ImportError:
+    no_setuid = True
 
 # I don't have a non-IPv6 computer, so I'm not sure how this works
 try:
