@@ -44,7 +44,8 @@ from sys import exit
 from time import time
 
 # Local imports
-from config import config, log, LOG_ERROR, LOG_PRINT, LOG_VERBOSE, LOG_DEBUG
+from config import config, ConfigError
+from config import log, LOG_ERROR, LOG_PRINT, LOG_VERBOSE, LOG_DEBUG
 # inet_pton isn't defined on windows, so use our own
 from utils import inet_pton
 
