@@ -3,7 +3,7 @@
 # master.py - a master server for Tremulous
 # Copyright (c) 2009 Ben Millwood
 #
-# Thanks to Mathieu Olivier, who wrote the original master in C
+# Thanks to Mathieu Olivier, who wrote much of the original master in C
 # (this project shares none of his code, but used it as a reference)
 #
 # This program is free software; you can redistribute it and/or modify it under
@@ -127,11 +127,8 @@ class Info(dict):
     def __str__(self):
         '''Converts self[key1] == value1, self[key2] == value2[, ...] to
         \\key1\\value1\\key2\\value2\\...'''
-        # Blame #python for this one :)
-        # the [['']]s inexpensively tell join() to put \\ at the start and end
-        return '\\'.join(i for it in ([['']], self.iteritems(), [['']])
-                           for t in it
-                           for i in t)
+        return '\\{0}\\'.format('\\'.join(i for t in self.iteritems()
+                                            for i in t))
 
     def parse(self, input):
         '''Converts \\key1\\value1\\key2\\value2\\... to self[key1] = value1,
