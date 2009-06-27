@@ -387,6 +387,9 @@ class MasterConfig:
             if errno != ENOENT:
                 raise
 
+config = MasterConfig()
+log = config.log
+
 if __name__ == '__main__':
     # This is useful with python -i config.py to examine a newly-created
     # configuration.
