@@ -90,7 +90,7 @@ except ImportError:
 class ConfigError(StandardError):
     pass
 
-class MasterConfig:
+class MasterConfig(object):
     def constants(self):
         '''Sets instance variables that do not change at run-time'''
         self.VERSION = 'Tremulous Master Server v0.1'
@@ -128,7 +128,7 @@ class MasterConfig:
         # optparse.OptionParser works.
         if attr == 'options':
             raise AttributeError
-        return getattr(self.options, attr)
+        return getattr(object.__getattribute__(self, 'options'), attr)
 
     def cmdline(self):
         '''Parse options from the command line. For an explanation of the
