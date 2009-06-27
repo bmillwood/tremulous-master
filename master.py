@@ -40,13 +40,23 @@ from random import choice
 from select import select, error as selecterror
 from socket import (socket, error as sockerr, has_ipv6,
                    AF_UNSPEC, AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
+from sys import exit
 from time import time
 
 # Local imports
-import config
-from config import log, LOG_ERROR, LOG_PRINT, LOG_VERBOSE, LOG_DEBUG
+from config import MasterConfig, ConfigError
+from config import LOG_ERROR, LOG_PRINT, LOG_VERBOSE, LOG_DEBUG
 # inet_pton isn't defined on windows, so use our own
 from utils import inet_pton
+
+config = MasterConfig()
+log = config.log
+try:
+    config.parse()
+except ConfigError as err:
+    # Note that we don't know how much user config is loaded at this stage
+    log(LOG_ERROR, err)
+    exit(1)
 
 # Optional imports
 try:
@@ -60,7 +70,6 @@ except ImportError:
     def log_client(*args):
         log(LOG_DEBUG, 'No database available, not logged:', args)
 
-config.parse()
 
 # dict: socks[address_family].family == address_family
 inSocks, outSocks = dict(), dict()
@@ -240,7 +249,7 @@ def count_servers(slist = servers):
 def heartbeat(sock, addr, data):
     '''In response to an incoming heartbeat: call its heartbeat method, and
     add it to the list'''
-    if config.maxservers >= 0 and count_servers() >= config.maxservers:
+    if config.max_servers >= 0 and count_servers() >= config.max_servers:
         log(LOG_VERBOSE, 'Warning: max server count exceeded, '
                          'heartbeat from', addr, 'ignored')
         return
@@ -355,32 +364,32 @@ def filterpacket(data, addr):
         return 'blacklisted'
 
 try:
-    # FIXME: this will probably give an error if inPort == outPort
+    # FIXME: this will probably give an error if port == challengeport
     # this is possibly correct behaviour but should at least be caught
     # explicitly if so
-    if not config.disable_ipv4 and config.bindaddr:
-        log(LOG_PRINT, 'IPv4: Listening on', config.bindaddr,
-                       'ports', config.inPort, 'and', config.outPort)
+    if config.ipv4 and config.listen_addr:
+        log(LOG_PRINT, 'IPv4: Listening on', config.listen_addr,
+                       'ports', config.port, 'and', config.challengeport)
         inSocks[AF_INET] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-        inSocks[AF_INET].bind((config.bindaddr, config.inPort))
+        inSocks[AF_INET].bind((config.listen_addr, config.port))
         outSocks[AF_INET] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
-        outSocks[AF_INET].bind((config.bindaddr, config.outPort))
+        outSocks[AF_INET].bind((config.listen_addr, config.challengeport))
 
-    if not config.disable_ipv6 and config.bind6addr and has_ipv6:
-        log(LOG_PRINT, 'IPv6: Listening on', config.bind6addr,
-                       'ports', config.inPort, 'and', config.outPort)
+    if config.ipv6 and config.listen6_addr:
+        log(LOG_PRINT, 'IPv6: Listening on', config.listen6_addr,
+                       'ports', config.port, 'and', config.challengeport)
         inSocks[AF_INET6] = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
-        inSocks[AF_INET6].bind((config.bind6addr, config.inPort))
+        inSocks[AF_INET6].bind((config.listen6_addr, config.port))
         outSocks[AF_INET6] = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
-        outSocks[AF_INET6].bind((config.bind6addr, config.outPort))
+        outSocks[AF_INET6].bind((config.listen6_addr, config.challengeport))
 
     if not inSocks and not outSocks:
         log(LOG_ERROR, 'Error: Not listening on any sockets, aborting')
-        raise SystemExit(1)
+        exit(1)
 
 except sockerr, (errno, strerror):
     log(LOG_ERROR, 'Couldn\'t initialise sockets:', strerror)
-    raise SystemExit(1)
+    raise exit(1)
 
 while True:
     try:
