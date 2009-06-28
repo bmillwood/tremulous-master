@@ -116,7 +116,7 @@ class Addr(tuple):
                 AF_INET: '{0[0]}:{0[1]}',
                 AF_INET6: '[{0[0]}]:{0[1]}'
             }[self.family].format(self)
-        except (AttributeError, IndexError):
+        except (AttributeError, IndexError, KeyError):
             return tuple.__str__(self)
 
 class Info(dict):
@@ -224,9 +224,8 @@ def find_featured(addr):
 
 def prune_timeouts(slist = servers[None]):
     '''Removes from the list any items whose timeout method returns true'''
-    # list()ing this should prevent RuntimeError: dictionary changed size
-    # during iteration
-    for (addr, server) in list(slist.iteritems()):
+    # iteritems gives RuntimeError: dictionary changed size during iteration
+    for (addr, server) in slist.items():
         if server.timed_out():
             del slist[addr]
             log(LOG_VERBOSE, 'Server dropped due to {0}s inactivity: '
