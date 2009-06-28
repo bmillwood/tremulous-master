@@ -288,7 +288,10 @@ def getmotd(sock, addr, data):
     sock.sendto(response, addr)
 
 def gamestat(sock, addr, data):
-    log_gamestat(addr, data[data.find(' ') + 1:])
+    '''Delegates to log_gamestat, cutting the first token (that it asserts is
+    'gamestat') from the data'''
+    assert data.startswith('gamestat')
+    log_gamestat(addr, data[len('gamestat'):].lstrip())
 
 def getservers(sock, addr, data):
     '''On a getservers or getserversExt, construct and send a response'''
