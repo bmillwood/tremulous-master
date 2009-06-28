@@ -127,8 +127,6 @@ class MasterConfig(object):
         access to them'''
         # They aren't set as attributes of self directly because of the way
         # optparse.OptionParser works.
-        if attr == 'options':
-            raise AttributeError
         return getattr(object.__getattribute__(self, 'options'), attr)
 
     def cmdline(self):
