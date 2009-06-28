@@ -32,7 +32,7 @@ Accepted incoming messages:
         before accepting it into the server list.
     'getservers <protocol> [empty] [full]'
         A request from the client to send the list of servers.
-"""
+""" # docstring TODO
 
 # Required imports
 from errno import EINTR
@@ -66,6 +66,8 @@ try:
     from db import log_client, log_gamestat
 except ImportError:
     def nodb(*args):
+        '''This function is defined and used when the db import is not
+        available, to print a debug-level warning message'''
         log(LOG_DEBUG, 'No database available, not logged:', args)
     log_client = log_gamestat = nodb
     log(LOG_PRINT, 'Warning: no database available')
@@ -106,6 +108,9 @@ class Addr(tuple):
         return self
 
     def __str__(self):
+        '''If self.family is AF_INET or AF_INET6, this provides a standard
+        representation of the host and port. Otherwise it falls back to the
+        standard tuple.__str__ method.'''
         try:
             return {
                 AF_INET: '{0[0]}:{0[1]}',
@@ -211,6 +216,7 @@ class Server(object):
         return True
 
 def find_featured(addr):
+    # docstring TODO
     # just in case it's an Addr
     for (label, addrs) in config.featured_servers.iteritems():
         if addr in addrs.keys():
@@ -241,7 +247,8 @@ def challenge():
     return ''.join([choice(valid) for _ in range(config.CHALLENGE_LENGTH)])
 
 def count_servers(slist = servers):
-    return sum(len(d) for d in servers.values())
+    # docstring TODO
+    return sum(map(len, servers.values()))
 
 def gamestat(sock, addr, data):
     '''Delegates to log_gamestat, cutting the first token (that it asserts is

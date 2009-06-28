@@ -1,12 +1,14 @@
 # config.py
 # Copyright (c) Ben Millwood 2009
 # This file is part of the Tremulous Master server.
-'''Configuration parameters and functions for the Tremulous Master
+'''Configuration for the Tremulous Master
 
-This module provides the MasterConfig class. Instances of this class provide
-the following attributes:
+This module provides the MasterConfig class, and the ConfigError exception.
+The latter is raised when the former fails to initialised for some reason.
+The former, after its parse() method is called, provides the following
+instance variables:
 
-version:
+VERSION:
         a string giving the name and version of the master
 CHALLENGE_LENGTH:
         the length of a getinfo challenge sent to servers
@@ -17,6 +19,12 @@ SERVER_TIMEOUT:
 GSR_MAXSERVERS:
         the maximum number of server addresses to be sent in a single
         getservers[Ext]Response packet (the client will only accept so many)
+FEATURED_FILE, IGNORE_FILE, MOTD_FILE:
+        These are mostly for internal use, but contain the file names from
+        which the featured servers, address blacklist, and motd are read.
+ipv4, ipv6:
+        These variables specify which interfaces the client will use: at least
+        one will be true, or ConfigError will be raised.
 listen_addr, listen6_addr, port, challengeport:
         The master needs a socket for incoming connections, for each of IPv4
         and IPv6 that it is asked to use (currently it assumes the same port on
@@ -88,9 +96,11 @@ except ImportError:
 ) = range(6)
 
 class ConfigError(StandardError):
+    # docstring TODO
     pass
 
 class MasterConfig(object):
+    # docstring TODO
     def constants(self):
         '''Sets instance variables that do not change at run-time'''
         self.VERSION = 'Tremulous Master Server v0.1'
@@ -113,11 +123,13 @@ class MasterConfig(object):
         self.MOTD_FILE = 'motd.txt'
 
     def __init__(self, vlevel = LOG_PRINT):
+        # docstring TODO
         # Set this early so that self.log can be used immediately
         self.options = Values()
         self.options.verbose = vlevel
 
     def parse(self):
+        # docstring TODO
         self.constants()
         self.cmdline()
         self.files()
