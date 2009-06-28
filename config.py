@@ -155,7 +155,7 @@ class MasterConfig(object):
             parser.add_option('-j', '--jail',
                               help = 'Path to chroot into at startup',
                               metavar = 'DIR')
-        parser.add_option('-l', '--listen-addr', default = '0.0.0.0',
+        parser.add_option('-l', '--listen-addr',
                           help = 'IPv4 address to listen to',
                           metavar = 'ADDR')
         if has_ipv6:
