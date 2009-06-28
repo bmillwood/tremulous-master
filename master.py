@@ -243,19 +243,32 @@ def challenge():
 def count_servers(slist = servers):
     return sum(len(d) for d in servers.values())
 
-def heartbeat(sock, addr, data):
-    '''In response to an incoming heartbeat: call its heartbeat method, and
-    add it to the list'''
-    if config.max_servers >= 0 and count_servers() >= config.max_servers:
-        log(LOG_VERBOSE, 'Warning: max server count exceeded, '
-                         'heartbeat from', addr, 'ignored')
+def gamestat(sock, addr, data):
+    '''Delegates to log_gamestat, cutting the first token (that it asserts is
+    'gamestat') from the data'''
+    assert data.startswith('gamestat')
+    log_gamestat(addr, data[len('gamestat'):].lstrip())
+
+def getmotd(sock, addr, data):
+    '''A client getmotd request: log the client information and then send the
+    response'''
+    log(LOG_DEBUG, '<< {0}: {1!r}'.format(addr, data))
+    cmd, infostr = data.split('\\', 1)
+    info = Info(infostr)
+    rinfo = Info()
+    log_client(addr, info)
+
+    try:
+        rinfo['challenge'] = info['challenge']
+    except KeyError:
+        log(LOG_VERBOSE, addr, 'Challenge missing or invalid', sep = ': ')
+    rinfo['motd'] = config.getmotd()
+    if not rinfo['motd']:
         return
-    # fetch or create a server record
-    label = find_featured(addr)
-    s = servers[label][addr] if addr in servers[label].keys() else Server(addr)
-    log(LOG_VERBOSE, '<< {0}: {1!r}'.format(s, data))
-    s.heartbeat(data)
-    servers[label][addr] = s
+
+    response = '\xff\xff\xff\xffmotd {0}'.format(rinfo)
+    log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, response))
+    sock.sendto(response, addr)
 
 def filterservers(slist, af, protocol, empty, full):
     '''Return those servers in slist that test true (have been verified) and:
@@ -269,29 +282,6 @@ def filterservers(slist, af, protocol, empty, full):
             and s.protocol == protocol
             and (empty or not s.empty)
             and (full  or not s.full)]
-
-def getmotd(sock, addr, data):
-    log(LOG_DEBUG, '<< {0}: {1!r}'.format(addr, data))
-    cmd, infostr = data.split('\\', 1)
-    info = Info(infostr)
-    rinfo = Info()
-    log_client(addr, info)
-    try:
-        rinfo['challenge'] = info['challenge']
-    except KeyError:
-        log(LOG_VERBOSE, addr, 'Challenge missing or invalid', sep = ': ')
-    rinfo['motd'] = config.getmotd()
-    if not rinfo['motd']:
-        return # don't bother responding
-    response = '\xff\xff\xff\xffmotd {0}'.format(rinfo)
-    log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, response))
-    sock.sendto(response, addr)
-
-def gamestat(sock, addr, data):
-    '''Delegates to log_gamestat, cutting the first token (that it asserts is
-    'gamestat') from the data'''
-    assert data.startswith('gamestat')
-    log_gamestat(addr, data[len('gamestat'):].lstrip())
 
 def getservers(sock, addr, data):
     '''On a getservers or getserversExt, construct and send a response'''
@@ -358,6 +348,20 @@ def getservers(sock, addr, data):
             sock.sendto(packet, addr)
             index += 1
 
+def heartbeat(sock, addr, data):
+    '''In response to an incoming heartbeat: call its heartbeat method, and
+    add it to the list'''
+    if config.max_servers >= 0 and count_servers() >= config.max_servers:
+        log(LOG_PRINT, 'Warning: max server count exceeded, '
+                       'heartbeat from', addr, 'ignored')
+        return
+    # fetch or create a server record
+    label = find_featured(addr)
+    s = servers[label][addr] if addr in servers[label].keys() else Server(addr)
+    log(LOG_DEBUG, '<< {0}: {1!r}'.format(s, data))
+    s.heartbeat(data)
+    servers[label][addr] = s
+
 def filterpacket(data, addr):
     '''Called on every incoming packet, checks if it should immediately be
     dropped, returning the reason as a string'''
@@ -419,11 +423,11 @@ while True:
             responses = [
                 # this looks like it should be a dict but since we use
                 # startswith it wouldn't really improve matters
-                ('heartbeat', heartbeat),
+                ('gamestat', gamestat),
+                ('getmotd', getmotd),
                 ('getservers', getservers),
                 ('getserversExt', getservers),
-                ('getmotd', getmotd),
-                ('gamestat', gamestat),
+                ('heartbeat', heartbeat),
                 # infoResponses will arrive on an outSock
             ]
             for (name, func) in responses:
