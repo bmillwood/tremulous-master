@@ -63,10 +63,12 @@ try:
 except ImportError:
     pass
 try:
-    from db import log_client
+    from db import log_client, log_gamestat
 except ImportError:
-    def log_client(*args):
+    def nodb(*args):
         log(LOG_DEBUG, 'No database available, not logged:', args)
+    log_client = log_gamestat = nodb
+    log(LOG_PRINT, 'Warning: no database available')
 
 
 # dict: socks[address_family].family == address_family
@@ -285,6 +287,9 @@ def getmotd(sock, addr, data):
     log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, response))
     sock.sendto(response, addr)
 
+def gamestat(sock, addr, data):
+    log_gamestat(addr, data[data.find(' ') + 1:])
+
 def getservers(sock, addr, data):
     '''On a getservers or getserversExt, construct and send a response'''
     log(LOG_VERBOSE, '<< {0}: {1!r}'.format(addr, data))
@@ -414,7 +419,8 @@ while True:
                 ('heartbeat', heartbeat),
                 ('getservers', getservers),
                 ('getserversExt', getservers),
-                ('getmotd', getmotd)
+                ('getmotd', getmotd),
+                ('gamestat', gamestat),
                 # infoResponses will arrive on an outSock
             ]
             for (name, func) in responses:

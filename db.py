@@ -5,6 +5,7 @@
 from contextlib import closing
 from os import O_RDWR, O_CREAT
 from tdb import Tdb
+from time import asctime, gmtime
 
 from config import log, LOG_VERBOSE, LOG_DEBUG
 
@@ -23,6 +24,11 @@ def log_client(addr, info):
 
             database[addr.host] = '"{0}" "{1}"'.format(version, renderer)
 
-            log(LOG_DEBUG, 'Recorded client stat for', addr)
+            log(LOG_VERBOSE, addr, 'Recorded client stat', sep = ': ')
     except ValueError, ex:
-        log(LOG_VERBOSE, 'Client', addr, 'not logged:', ex)
+        log(LOG_PRINT, addr, 'Client not logged', ex, sep = ': ')
+
+def log_gamestat(addr, data):
+    with closing(Tdb('gameStats.tdb', flags = O_RDWR|O_CREAT)) as database:
+        key = '{0} {1}'.format(addr.host, asctime(gmtime()))
+        database[key] = data
