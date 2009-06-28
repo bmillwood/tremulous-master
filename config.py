@@ -112,10 +112,10 @@ class MasterConfig(object):
         self.FEATURED_FILE = 'featured.txt'
         self.MOTD_FILE = 'motd.txt'
 
-    def __init__(self):
+    def __init__(self, vlevel = LOG_PRINT):
         # Set this early so that self.log can be used immediately
         self.options = Values()
-        self.options.verbose = LOG_PRINT
+        self.options.verbose = vlevel
 
     def parse(self):
         self.constants()
