@@ -110,6 +110,7 @@ class MasterConfig(object):
 
         self.IGNORE_FILE = 'ignore.txt'
         self.FEATURED_FILE = 'featured.txt'
+        self.MOTD_FILE = 'motd.txt'
 
     def __init__(self):
         # Set this early so that self.log can be used immediately
@@ -377,12 +378,12 @@ class MasterConfig(object):
             else:
                 raise
 
-    def getmotd():
+    def getmotd(self):
         '''Reads the motd file and returns the contents'''
-        motd_file = 'motd.txt'
+        # FIXME: validate the value as an info parameter (no \\ etc.)
         try:
-            with open(motd_file) as motd:
-                return motd.read() # FIXME: validate as an info parameter
+            with open(self.MOTD_FILE) as motd:
+                return motd.read().rstrip('\n')
         except IOError, (errno, strerror):
             if errno != ENOENT:
                 raise
