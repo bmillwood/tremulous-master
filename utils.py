@@ -49,10 +49,12 @@ def valid_addr(addr, afs = (AF_INET, AF_INET6)):
     return None
 
 def parse_addrwport(addr):
+    # docstring TODO
     sep = addr.rindex(':')
     return (addr[:sep], int(addr[sep + 1:]))
 
 def stringtosockaddr(str, family = None, socktype = SOCK_DGRAM):
+    # docstring TODO
     if family == None:
         try:
             return getaddrinfo(*parse_addrwport(str) +
