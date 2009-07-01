@@ -62,16 +62,22 @@ try:
     signal(SIGHUP, SIG_IGN)
 except ImportError:
     pass
-try:
-    from db import log_client, log_gamestat
-except ImportError:
-    def nodb(*args):
-        '''This function is defined and used when the db import is not
-        available, to print a debug-level warning message'''
-        log(LOG_DEBUG, 'No database available, not logged:', args)
-    log_client = log_gamestat = nodb
-    log(LOG_PRINT, 'Warning: no database available')
 
+if not config.no_db:
+    try:
+        from db import log_client, log_gamestat
+    except ImportError:
+        def nodb(*args):
+            '''This function is defined and used when the db import is not
+            available, to print a debug-level warning message'''
+            log(LOG_DEBUG, 'No database available, not logged:', args)
+        log_client = log_gamestat = nodb
+        log(LOG_PRINT, 'Warning: no database available')
+else:
+    def disabled_db(*args):
+        '''This function is defined and used when the database is disabled by
+        configuration options'''
+    log_client = log_gamestat = disabled_db
 
 # dict: socks[address_family].family == address_family
 inSocks, outSocks = dict(), dict()

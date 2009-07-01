@@ -175,6 +175,8 @@ class MasterConfig(object):
             parser.add_option('-L', '--listen6-addr',
                               help = 'IPv6 address to listen to',
                               metavar = 'ADDR')
+        parser.add_option('-N', '--no-db', action = 'store_true',
+                          help = 'Do not log to a database')
         parser.add_option('-n', '--max-servers', type = 'int',
                           help = 'Maximum number of servers to track',
                           metavar = 'NUM')
@@ -258,6 +260,9 @@ class MasterConfig(object):
         elif self.challengeport == self.port:
             self.log(LOG_PRINT, 'Warning: request port and challenge port are '
                                 'the same ({0})'.format(self.port))
+
+        if config.no_db:
+            self.log(LOG_VERBOSE, 'Not using a database')
 
     def files(self):
         '''For each space-separated address in ignore_file, check if it is
