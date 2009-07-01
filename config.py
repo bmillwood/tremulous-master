@@ -277,12 +277,12 @@ class MasterConfig(object):
         self.addr_blacklist = list()
         try:
             with open(self.IGNORE_FILE) as ignore:
-                self.log(LOG_DEBUG, 'Opened', parser.IGNORE_FILE)
+                self.log(LOG_DEBUG, 'Opened', self.IGNORE_FILE)
                 for line in ignore:
                     for addr in line.split():
                         if valid_addr(addr):
                             self.addr_blacklist.append(addr)
-                self.log(LOG_VERBOSE, 'Ignoring:', *addr_blacklist)
+                self.log(LOG_VERBOSE, 'Ignoring:', self.addr_blacklist)
         except IOError, (errno, strerror):
             if errno != ENOENT:
                 raise
