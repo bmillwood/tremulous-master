@@ -87,13 +87,15 @@ except ImportError:
     has_ipv6 = False
 
 ( # Log levels
-    LOG_NONE,
+    LOG_ALWAYS,
     LOG_ERROR,
     LOG_PRINT,
     LOG_VERBOSE,
     LOG_DEBUG,
     LOG_LEVELS
 ) = range(6)
+# and their names
+loglevels = ['ALWAYS', 'ERROR', 'PRINT', 'VERBOSE', 'DEBUG']
 
 class ConfigError(StandardError):
     # docstring TODO
@@ -198,7 +200,7 @@ class MasterConfig(object):
         parser.add_option('--verbose', type = 'int', default = LOG_PRINT,
                           help = 'Set verbose level directly. Takes a single '
                                  'integer argument between {0} and {1}'.format(
-                                 LOG_NONE, LOG_LEVELS - 1),
+                                 LOG_ALWAYS, LOG_LEVELS - 1),
                           metavar = 'LEVEL')
         parser.add_option('-V', '--version', action = 'store_true',
                           help = 'Show version information')
@@ -219,9 +221,11 @@ class MasterConfig(object):
 
         self.verbose += self.v - self.q
 
-        if not LOG_NONE <= self.verbose < LOG_LEVELS:
+        self.log(LOG_VERBOSE, 'Logging:', *loglevels[:self.verbose + 1])
+
+        if not LOG_ALWAYS <= self.verbose < LOG_LEVELS:
             raise ConfigError('Verbose level must be between {0} and {1} '
-                              '(not {2})'.format(LOG_NONE, LOG_LEVELS - 1,
+                              '(not {2})'.format(LOG_ALWAYS, LOG_LEVELS - 1,
                                                  self.verbose))
 
         if not self.ipv4 and not self.ipv6:
@@ -385,10 +389,6 @@ class MasterConfig(object):
             f.write(strftime('[%H:%M:%S] ') + sep.join(map(str, args)) + '\n')
         except IOError as (errno, strerror):
             if errno == EIO:
-                # this happens when we lose contact with the terminal
-                # we could stop all logging at this point but it doesn't
-                # actually help a great deal...
-                #self.verbose = LOG_NONE
                 pass
             else:
                 raise
