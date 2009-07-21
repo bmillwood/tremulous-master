@@ -185,38 +185,45 @@ class Server(object):
     def heartbeat(self, data):
         '''Sends a getinfo challenge and records the current time'''
         self.challenge = challenge()
-        self.sock.sendto('\xff\xff\xff\xffgetinfo ' + self.challenge,
-            self.addr)
+        packet = '\xff\xff\xff\xffgetinfo ' + self.challenge
+        log(LOG_DEBUG, '>> {0}: {1!r}'.format(self, packet))
+        self.sock.sendto(packet, self.addr)
         self.set_timeout(time() + config.CHALLENGE_TIMEOUT)
-        log(LOG_VERBOSE, '>> {0}: getinfo'.format(self.addr))
 
     def infoResponse(self, data):
         '''Returns True if the info given is as complete as necessary and
         the challenge returned matches the challenge sent'''
+        addrstr = '<< {0}'.format(self)
         if not data.startswith('infoResponse'):
-            log(LOG_VERBOSE, 'unexpected packet on challenge socket:', data)
+            log(LOG_VERBOSE, addrstr, 'unexpected packet on challenge socket, '
+                                      'ignored')
             return False
-        # this is hurried to fix a crash, do it properly when there's time
-        i = 1
-        for c in data:
+        addrstr += ': infoResponse:'
+        # find the beginning of the infostring
+        for i, c in enumerate(data):
             if c in ' \\\n':
                 break
-            i += 1
-        infostring = data[i:]
+        infostring = data[i + 1:]
         if not infostring:
-            log(LOG_VERBOSE, 'no infostring found')
+            log(LOG_VERBOSE, addrstr, 'no infostring found')
             return False
         info = Info(infostring)
         try:
             if info['challenge'] != self.challenge:
-                log(LOG_VERBOSE, self, 'mismatched challenge', sep = ': ')
+                log(LOG_VERBOSE, addrstr, 'mismatched challenge: '
+                    '{0!r} != {1!r}'.format(info['challenge'], self.challenge))
                 return False
             self.protocol = info['protocol']
             self.empty = (info['clients'] == '0')
             self.full = (info['clients'] == info['sv_maxclients'])
-        except KeyError, ex:
-            log(LOG_VERBOSE, self, 'info key missing', ex, sep = ': ')
+        except KeyError as ex:
+            log(LOG_VERBOSE, addrstr, 'info key missing:', ex)
             return False
+        if self.lastactive:
+            log(LOG_VERBOSE, addrstr, 'verified')
+        else:
+            log(LOG_VERBOSE, addrstr, 'verified, added to list '
+                                      '({0})'.format(count_servers()))
         self.lastactive = time()
         self.set_timeout(self.lastactive + config.SERVER_TIMEOUT)
         return True
@@ -234,8 +241,13 @@ def prune_timeouts(slist = servers[None]):
     for (addr, server) in slist.items():
         if server.timed_out():
             del slist[addr]
-            log(LOG_VERBOSE, 'Server dropped due to {0}s inactivity: '
-                             '{1}'.format(time() - server.lastactive, server))
+            remstr = str(count_servers())
+            if server.lastactive:
+                log(LOG_VERBOSE, '{0} dropped due to {1}s inactivity '
+                    '({2})'.format(server, time() - server.lastactive, remstr))
+            else:
+                log(LOG_VERBOSE, '{0} dropped: no response '
+                    '({1})'.format(server, remstr))
 
 def challenge():
     '''Returns a string of config.CHALLENGE_LENGTH characters, chosen from
@@ -264,7 +276,6 @@ def gamestat(sock, addr, data):
 def getmotd(sock, addr, data):
     '''A client getmotd request: log the client information and then send the
     response'''
-    log(LOG_DEBUG, '<< {0}: {1!r}'.format(addr, data))
     cmd, infostr = data.split('\\', 1)
     info = Info(infostr)
     rinfo = Info()
@@ -303,7 +314,6 @@ def gsr_formataddr(addr):
 
 def getservers(sock, addr, data):
     '''On a getservers or getserversExt, construct and send a response'''
-    log(LOG_VERBOSE, '<< {0}: {1!r}'.format(addr, data))
 
     tokens = data.split()
     ext = (tokens.pop(0) == 'getserversExt')
@@ -381,7 +391,6 @@ def heartbeat(sock, addr, data):
     # fetch or create a server record
     label = find_featured(addr)
     s = servers[label][addr] if addr in servers[label].keys() else Server(addr)
-    log(LOG_DEBUG, '<< {0}: {1!r}'.format(s, data))
     s.heartbeat(data)
     servers[label][addr] = s
 
@@ -430,6 +439,8 @@ while True:
         if errno == EINTR:
             continue
         raise
+    except KeyboardInterrupt:
+        exit('Interrupted')
     prune_timeouts()
     for sock in inSocks.values():
         if sock in ready:
@@ -438,6 +449,7 @@ while True:
             saddr = Addr(addr, sock.family)
             # for logging
             addrstr = '<< {0}:'.format(saddr)
+            log(LOG_DEBUG, addrstr, repr(data))
             res = filterpacket(data, saddr)
             if res:
                 log(LOG_VERBOSE, addrstr, 'rejected ({0})'.format(res))
@@ -465,6 +477,7 @@ while True:
             saddr = Addr(addr, sock.family)
             # for logging
             addrstr = '<< {0}:'.format(saddr)
+            log(LOG_DEBUG, addrstr, repr(data))
             res = filterpacket(data, saddr)
             if res:
                 log(LOG_VERBOSE, addrstr, 'rejected ({0})'.format(res))
@@ -478,6 +491,6 @@ while True:
                 continue
             # this has got to be an infoResponse, right?
             if servers[label][addr].infoResponse(data):
-                log(LOG_VERBOSE, addrstr, 'getinfoResponse confirmed')
+                pass
             elif label is None:
                 del servers[None][addr]

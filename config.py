@@ -355,7 +355,15 @@ class MasterConfig(object):
         except IOError, (errno, strerror):
             if errno != ENOENT:
                 raise
-        
+
+    @staticmethod
+    def logprefix(level):
+        # docstring TODO
+        # not sure why this is a separate method
+        time = strftime('%H:%M:%S')
+        levelname = loglevels[level]
+        shortlevel = levelname[:3]
+        return '[{time}] {levelname[0]} '.format(**locals())
 
     def log(self, level, *args, **kwargs):
         '''log(level, arg[, arg]*[, sep = ' '])
@@ -386,7 +394,7 @@ class MasterConfig(object):
 
         try:
             f = stderr if level in (LOG_ERROR, LOG_DEBUG) else stdout
-            f.write(strftime('[%H:%M:%S] ') + sep.join(map(str, args)) + '\n')
+            f.write(self.logprefix(level) + sep.join(map(str, args)) + '\n')
         except IOError as (errno, strerror):
             if errno == EIO:
                 pass
