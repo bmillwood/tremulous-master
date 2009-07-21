@@ -403,9 +403,6 @@ def filterpacket(data, addr):
         return 'blacklisted'
 
 try:
-    # FIXME: this will probably give an error if port == challengeport
-    # this is possibly correct behaviour but should at least be caught
-    # explicitly if so
     if config.ipv4 and config.listen_addr:
         log(LOG_PRINT, 'IPv4: Listening on', config.listen_addr,
                        'ports', config.port, 'and', config.challengeport)

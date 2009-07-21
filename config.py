@@ -262,8 +262,8 @@ class MasterConfig(object):
             self.log(LOG_VERBOSE, 'Automatically set challenge port to',
                                   self.challengeport)
         elif self.challengeport == self.port:
-            self.log(LOG_PRINT, 'Warning: request port and challenge port are '
-                                'the same ({0})'.format(self.port))
+            raise ConfigError('Request port and challenge port must not be '
+                              'the same ({0})'.format(self.port))
 
         if config.no_db:
             self.log(LOG_VERBOSE, 'Not using a database')
