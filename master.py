@@ -295,6 +295,12 @@ def filterservers(slist, af, protocol, empty, full):
             and (empty or not s.empty)
             and (full  or not s.full)]
 
+def gsr_formataddr(addr):
+    sep  = '\\' if addr.family == AF_INET else '/'
+    host = inet_pton(addr.family, addr.host)
+    port = chr(addr.port >> 8) + chr(addr.port & 0xff)
+    return sep + host + port
+
 def getservers(sock, addr, data):
     '''On a getservers or getserversExt, construct and send a response'''
     log(LOG_VERBOSE, '<< {0}: {1!r}'.format(addr, data))
@@ -303,62 +309,67 @@ def getservers(sock, addr, data):
     ext = (tokens.pop(0) == 'getserversExt')
     if ext:
         if tokens.pop(0) != 'Tremulous':
-            pass # this parameter doesn't seem to affect much?
+            log(LOG_VERBOSE, '<< {0}: ext but not Tremulous, '
+                             'ignored'.format(addr))
+            return
     protocol = tokens.pop(0)
     empty, full = 'empty' in tokens, 'full' in tokens
     if ext:
-        family = (AF_INET if 'ipv4' in tokens
-           else (AF_INET6 if 'ipv6' in tokens
-           else AF_UNSPEC))
+        family = (AF_INET  if 'ipv4' in tokens
+             else AF_INET6 if 'ipv6' in tokens
+             else AF_UNSPEC)
     else:
         family = AF_INET
 
-    # do a pass to work out how many packets are needed
-    numpackets = 0
+    max = config.GSR_MAXSERVERS
+    packets = {None: list()}
     for label in servers.keys():
-        max = config.GSR_MAXSERVERS
-        filtered = filterservers(servers[label].values(),
-                                 family, protocol, empty, full)
-        numpackets += (len(filtered) + max - 1) // max;
+        # dict of lists of lists
+        if ext:
+            packets[label] = list()
+            filtered = filterservers(servers[label].values(),
+                                     family, protocol, empty, full)
+            while len(filtered) > 0:
+                packets[label].append(filtered[:config.GSR_MAXSERVERS])
+                filtered = filtered[config.GSR_MAXSERVERS:]
+        else:
+            filtered = filterservers(servers[label].values(),
+                                     family, protocol, empty, full)
+            if not packets[None]:
+                packets[None].append(filtered[:config.GSR_MAXSERVERS])
+                filtered = filtered[config.GSR_MAXSERVERS:]
+            while len(filtered) > 0:
+                space = config.GSR_MAXSERVERS - len(packets[None][-1])
+                if space:
+                    packets[None][-1].extend(filtered[:space])
+                    filtered = filtered[space:]
+                else:
+                    packets[None].append(filtered[:config.GSR_MAXSERVERS])
+                    filtered = filtered[config.GSR_MAXSERVERS:]
 
     start = '\xff\xff\xff\xffgetservers{0}Response'.format(
                                       'Ext' if ext else '')
-    if numpackets == 0:
-        # empty response
-        sock.sendto(start + '\\', addr)
-        return
 
     index = 1
-    for label in servers.keys():
-        filtered = filterservers(servers[label].values(),
-                                 family, protocol, empty, full)
+    numpackets = sum(len(ps) for ps in packets.values())
+    if numpackets == 0:
+        # send an empty packet
+        numpackets = 1
+        packets[None] = [[]]
+    for label, packs in packets.items():
         if label is None:
             label = ''
-        packet = start
-        if ext:
-            packet += '\0{index}\0{numpackets}\0{label}'.format(**locals())
-        count = 0
-        for server in filtered:
-            sep = '\\' if server.addr.family == AF_INET else '/'
-            packed = inet_pton(server.addr.family, server.addr.host)
-            packed += chr(server.addr.port >> 8) + chr(server.addr.port & 0xff)
-            packet += sep + packed
-            count += 1
-            if count >= config.GSR_MAXSERVERS:
-                packet += '\\'
-                log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, packet))
-                sock.sendto(packet, addr)
-                count = 0
-                index += 1
-                packet = start
-                if ext:
-                    packet += '\0{index}\0{numpackets}\0{label}'.format(
-                              **locals())
-        if count:
-            packet += '\\'
-            log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, packet))
-            sock.sendto(packet, addr)
+        for packet in packs:
+            message = start
+            if ext:
+                message += '\0{0}\0{1}\0{2}'.format(index, numpackets, label)
+            message += ''.join(gsr_formataddr(s.addr) for s in packet)
+            log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, message))
+            sock.sendto(message, addr)
             index += 1
+    npstr = '1 packet' if numpackets == 1 else '{0} packets'.format(numpackets)
+    log(LOG_VERBOSE, '>> {0}: getservers{1}Response: sent '
+                     '{2}'.format(addr, 'Ext' if ext else '', npstr))
 
 def heartbeat(sock, addr, data):
     '''In response to an incoming heartbeat: call its heartbeat method, and
