@@ -42,8 +42,6 @@ featured_servers:
         This is a dict of lists - each key is a label, and its value is a list
         of addresses. They will be sent in a separate response packet, headered
         with the label, so that the client can display them specially.
-addr_blacklist:
-        A list of addresses from which packets should be rejected
 
 and some useful functions:
 
@@ -55,6 +53,9 @@ log(level, arg[, arg...], sep = ' '):
         argument `sep' (default ' ')
 getmotd():
         Simply reads the motd file and returns the result.
+ignore(addr):
+        Reads the IGNORE_FILE and returns True if the given IP address string
+        is blacklisted by its contents.
 '''
 
 # Required imports
@@ -64,7 +65,7 @@ from sys import argv, stdout, stderr
 from time import strftime
 
 # Local imports
-from utils import valid_addr, stringtosockaddr
+from utils import inet_pton, valid_addr, stringtosockaddr
 
 # Optional imports
 # I named these variables in line with the standard library's has_ipv6.
@@ -269,28 +270,13 @@ class MasterConfig(object):
             self.log(LOG_VERBOSE, 'Not using a database')
 
     def files(self):
-        '''For each space-separated address in ignore_file, check if it is
-        valid and if so add it to the addr_blacklist.
-        Then read self.FEATURED_FILE, and for each label (starting at column 0)
+        '''Read self.FEATURED_FILE, and for each label (starting at column 0)
         construct a dict of the (indented) addresses following it. Each dict
         value starts off as None, to be initialised as the connections are
         made.
         self.featured_servers[label] is set to its corresponding dict.
         A missing file is ignored but other errors - e.g. if the file is
         present but can't be read - are fatal.'''
-        self.addr_blacklist = list()
-        try:
-            with open(self.IGNORE_FILE) as ignore:
-                self.log(LOG_DEBUG, 'Opened', self.IGNORE_FILE)
-                for line in ignore:
-                    for addr in line.split():
-                        if valid_addr(addr):
-                            self.addr_blacklist.append(addr)
-                self.log(LOG_VERBOSE, 'Ignoring:', self.addr_blacklist)
-        except IOError, (errno, strerror):
-            if errno != ENOENT:
-                raise
-
         self.featured_servers = dict()
         # FIXME: use ConfigError where appropriate
         try:
@@ -352,6 +338,54 @@ class MasterConfig(object):
                     # featured.txt: 'Label': [server1, server2, ...]
                     self.log(LOG_VERBOSE, self.FEATURED_FILE, repr(label),
                              self.featured_servers[label].keys(), sep = ': ')
+        except IOError, (errno, strerror):
+            if errno != ENOENT:
+                raise
+
+    def ignore(self, addr):
+        '''Read self.IGNORE_FILE to check if addr (an IP) is in it.
+
+        The file should consist of blank-separated addresses or address ranges
+        in CIDR format to ignore.'''
+        bits = inet_pton(valid_addr(addr), addr)
+        try:
+            with open(self.IGNORE_FILE) as ignore:
+                for line in ignore:
+                    for word in line.split():
+                        try:
+                            # is this CIDR?
+                            iaddr, mask = word.split('/', 1)
+                            mask = int(mask)
+                        except ValueError:
+                            try:
+                                # exact match only
+                                if bits == inet_pton(valid_addr(word), word):
+                                    return True
+                            except EnvironmentError as err:
+                                # inet_pton failed
+                                self.log(LOG_PRINT, 'ignore.txt token', word,
+                                         'could not be parsed:', err)
+                            continue
+                        try:
+                            ibits = inet_pton(valid_addr(iaddr), iaddr)
+                        except EnvironmentError:
+                            continue
+                        for byte, ibyte in zip(bits, ibits):
+                            if not mask:
+                                return True
+                            elif mask >= 8:
+                                if byte != ibyte:
+                                    break
+                                mask -= 8
+                            else:
+                                b, i = ord(byte), ord(ibyte)
+                                m = 0xff00 >> mask
+                                if b & m == i & m:
+                                    return True
+                                else:
+                                    break
+                return False
+
         except IOError, (errno, strerror):
             if errno != ENOENT:
                 raise

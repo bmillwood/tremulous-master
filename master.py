@@ -400,7 +400,7 @@ def filterpacket(data, addr):
     dropped, returning the reason as a string'''
     if not data.startswith('\xff\xff\xff\xff'):
         return 'no header'
-    if addr.host in config.addr_blacklist:
+    if config.ignore(addr.host):
         return 'blacklisted'
 
 try:
