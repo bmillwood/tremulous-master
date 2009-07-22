@@ -105,7 +105,8 @@ class Addr(tuple):
             self.host, self.port = addr[:2]
             self.family = family
         else:
-            assert family is None
+            if family is not None:
+                raise TypeError('Must give Addr either zero arguments or two')
 
     def parse(self, string):
         '''Initialise and return self with the given string'''
