@@ -487,7 +487,4 @@ while True:
                 log(LOG_VERBOSE, addrstr, 'rejected (unsolicited)')
                 continue
             # this has got to be an infoResponse, right?
-            if servers[label][addr].infoResponse(data):
-                pass
-            elif label is None:
-                del servers[None][addr]
+            servers[label][addr].infoResponse(data)
