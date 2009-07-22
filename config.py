@@ -342,6 +342,16 @@ class MasterConfig(object):
             if errno != ENOENT:
                 raise
 
+    def getmotd(self):
+        '''Reads the motd file and returns the contents'''
+        # FIXME: validate the value as an info parameter (no \\ etc.)
+        try:
+            with open(self.MOTD_FILE) as motd:
+                return motd.read().rstrip('\n')
+        except IOError, (errno, strerror):
+            if errno != ENOENT:
+                raise
+
     def ignore(self, addr):
         '''Read self.IGNORE_FILE to check if addr (an IP) is in it.
 
@@ -433,16 +443,6 @@ class MasterConfig(object):
             if errno == EIO:
                 pass
             else:
-                raise
-
-    def getmotd(self):
-        '''Reads the motd file and returns the contents'''
-        # FIXME: validate the value as an info parameter (no \\ etc.)
-        try:
-            with open(self.MOTD_FILE) as motd:
-                return motd.read().rstrip('\n')
-        except IOError, (errno, strerror):
-            if errno != ENOENT:
                 raise
 
 config = MasterConfig()
