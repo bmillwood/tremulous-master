@@ -277,7 +277,11 @@ def gamestat(sock, addr, data):
 def getmotd(sock, addr, data):
     '''A client getmotd request: log the client information and then send the
     response'''
-    cmd, infostr = data.split('\\', 1)
+    addrstr = '<< {0}'.format(addr)
+    try:
+        _, infostr = data.split('\\', 1)
+    except ValueError:
+        infostr = ''
     info = Info(infostr)
     rinfo = Info()
     log_client(addr, info)
@@ -285,7 +289,7 @@ def getmotd(sock, addr, data):
     try:
         rinfo['challenge'] = info['challenge']
     except KeyError:
-        log(LOG_VERBOSE, addr, 'Challenge missing or invalid', sep = ': ')
+        log(LOG_VERBOSE, addrstr, 'Challenge missing or invalid', sep = ': ')
     rinfo['motd'] = config.getmotd()
     if not rinfo['motd']:
         return
