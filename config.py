@@ -4,7 +4,7 @@
 '''Configuration for the Tremulous Master
 
 This module provides the MasterConfig class, and the ConfigError exception.
-The latter is raised when the former fails to initialised for some reason.
+The latter is raised when the former fails to initialise for some reason.
 The former, after its parse() method is called, provides the following
 instance variables:
 
