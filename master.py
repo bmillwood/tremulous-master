@@ -36,6 +36,7 @@ Accepted incoming messages:
 
 # Required imports
 from errno import EINTR
+from itertools import chain
 from random import choice
 from select import select, error as selecterror
 from socket import (socket, error as sockerr, has_ipv6,
@@ -84,7 +85,7 @@ inSocks, outSocks = dict(), dict()
 
 # dict of [label][addr] -> Server instance
 servers = dict((label, dict()) for label in
-               config.featured_servers.keys() + [None])
+               chain(config.featured_servers.keys(), [None]))
 
 class Addr(tuple):
     '''Data structure for storing socket addresses, that provides a parse
@@ -428,17 +429,18 @@ try:
         log(LOG_ERROR, 'Error: Not listening on any sockets, aborting')
         exit(1)
 
-except sockerr, (errno, strerror):
-    log(LOG_ERROR, 'Couldn\'t initialise sockets:', strerror)
+except sockerr as err:
+    log(LOG_ERROR, 'Couldn\'t initialise sockets:', err.strerror)
     raise exit(1)
 
 while True:
     try:
-        (ready, _, _) = select(inSocks.values() + outSocks.values(), [], [])
-    except selecterror, (errno, strerror):
+        ret = select(chain(inSocks.values(), outSocks.values()), [], [])
+        ready = ret[0]
+    except selecterror as err:
         # select can be interrupted by a signal: if it wasn't a fatal signal,
         # we don't care
-        if errno == EINTR:
+        if err.errno == EINTR:
             continue
         raise
     except KeyboardInterrupt:

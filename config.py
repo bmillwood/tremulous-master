@@ -98,7 +98,7 @@ except ImportError:
 # and their names
 loglevels = ['ALWAYS', 'ERROR', 'PRINT', 'VERBOSE', 'DEBUG']
 
-class ConfigError(StandardError):
+class ConfigError(Exception):
     # docstring TODO
     pass
 
@@ -235,9 +235,9 @@ class MasterConfig(object):
         if self.jail is not None:
             try:
                 chroot(self.jail)
-            except OSError as (errno, strerror):
+            except OSError as err:
                 raise ConfigError('chroot {0}: {1}'.format(self.jail,
-                                                           strerror))
+                                                           err.strerror))
             self.log(LOG_VERBOSE, 'Chrooted to', self.jail)
         if self.user is not None:
             try:
@@ -250,8 +250,8 @@ class MasterConfig(object):
 
             try:
                 setuid(uid)
-            except OSError as (errno, strerror):
-                raise ConfigError('setuid {0}: {1}'.format(uid, strerror))
+            except OSError as err:
+                raise ConfigError('setuid {0}: {1}'.format(uid, err.strerror))
 
             self.log(LOG_VERBOSE, 'UID set to', getuid())
 
@@ -338,8 +338,8 @@ class MasterConfig(object):
                     # featured.txt: 'Label': [server1, server2, ...]
                     self.log(LOG_VERBOSE, self.FEATURED_FILE, repr(label),
                              self.featured_servers[label].keys(), sep = ': ')
-        except IOError, (errno, strerror):
-            if errno != ENOENT:
+        except IOError as err:
+            if err.errno != ENOENT:
                 raise
 
     def getmotd(self):
@@ -348,8 +348,8 @@ class MasterConfig(object):
         try:
             with open(self.MOTD_FILE) as motd:
                 return motd.read().rstrip('\n')
-        except IOError, (errno, strerror):
-            if errno != ENOENT:
+        except IOError as err:
+            if err.errno != ENOENT:
                 raise
 
     def ignore(self, addr):
@@ -396,8 +396,8 @@ class MasterConfig(object):
                                     break
                 return False
 
-        except IOError, (errno, strerror):
-            if errno != ENOENT:
+        except IOError as err:
+            if err.errno != ENOENT:
                 raise
 
     @staticmethod
@@ -439,8 +439,8 @@ class MasterConfig(object):
         try:
             f = stderr if level in (LOG_ERROR, LOG_DEBUG) else stdout
             f.write(self.logprefix(level) + sep.join(map(str, args)) + '\n')
-        except IOError as (errno, strerror):
-            if errno == EIO:
+        except IOError as err:
+            if err.errno == EIO:
                 pass
             else:
                 raise

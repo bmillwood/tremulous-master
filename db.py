@@ -19,14 +19,14 @@ def log_client(addr, info):
                 renderer = info['renderer']
                 if '\"' in version + renderer:
                     raise ValueError('Invalid character in info string')
-            except KeyError, e:
-                raise ValueError('Missing info key: ' + str(e))
+            except KeyError as err:
+                raise ValueError('Missing info key: ' + str(err))
 
             database[addr.host] = '"{0}" "{1}"'.format(version, renderer)
 
             log(LOG_VERBOSE, addr, 'Recorded client stat', sep = ': ')
-    except ValueError, ex:
-        log(LOG_PRINT, addr, 'Client not logged', ex, sep = ': ')
+    except ValueError as err:
+        log(LOG_PRINT, addr, 'Client not logged', err, sep = ': ')
 
 def log_gamestat(addr, data):
     with closing(Tdb('gameStats.tdb', flags = O_RDWR|O_CREAT)) as database:
