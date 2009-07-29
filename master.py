@@ -236,6 +236,8 @@ def find_featured(addr):
     for (label, addrs) in config.featured_servers.iteritems():
         if addr in addrs.keys():
             return label
+    else:
+        return None
 
 def prune_timeouts(slist = servers[None]):
     '''Removes from the list any items whose timeout method returns true'''
@@ -263,7 +265,7 @@ def challenge():
     For compatibility testing purposes, I've temporarily disallowed them again.
     '''
     valid = [c for c in map(chr, range(0x21, 0x7f)) if c not in '\\;%\"/']
-    return ''.join([choice(valid) for _ in range(config.CHALLENGE_LENGTH)])
+    return ''.join(choice(valid) for _ in range(config.CHALLENGE_LENGTH))
 
 def count_servers(slist = servers):
     # docstring TODO
@@ -465,7 +467,7 @@ while True:
                 ('gamestat', gamestat),
                 ('getmotd', getmotd),
                 ('getservers', getservers),
-                ('getserversExt', getservers),
+                # getserversExt also starts with getservers
                 ('heartbeat', heartbeat),
                 # infoResponses will arrive on an outSock
             ]
