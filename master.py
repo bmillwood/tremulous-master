@@ -382,6 +382,7 @@ def getservers(sock, addr, data):
             if ext:
                 message += '\0{0}\0{1}\0{2}'.format(index, numpackets, label)
             message += ''.join(gsr_formataddr(s.addr) for s in packet)
+            log(LOG_DEBUG, '>> {0}: {1} servers'.format(addr, len(packet))
             log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, message))
             sock.sendto(message, addr)
             index += 1
@@ -398,6 +399,8 @@ def heartbeat(sock, addr, data):
         return
     # fetch or create a server record
     label = find_featured(addr)
+    if label is not None:
+        log(LOG_DEBUG, '<< {0}:'.format(addr), 'Featured server:', label)
     s = servers[label][addr] if addr in servers[label].keys() else Server(addr)
     s.heartbeat(data)
     servers[label][addr] = s
