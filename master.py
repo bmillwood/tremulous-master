@@ -211,6 +211,7 @@ class Server(object):
             return False
         info = Info(infostring)
         try:
+            name = info['hostname']
             if info['challenge'] != self.challenge:
                 log(LOG_VERBOSE, addrstr, 'mismatched challenge: '
                     '{0!r} != {1!r}'.format(info['challenge'], self.challenge))
