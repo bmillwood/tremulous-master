@@ -165,6 +165,11 @@ class MasterConfig(object):
             parser.add_option('-6', '--ipv6', action = 'store_false',
                               default = True, dest = 'ipv4',
                               help = 'Only use IPv6')
+        # a better error message here for invalid values would be nice
+        parser.add_option('-d', '--db', help = 'Database backend to use, '
+                          '<none|tdb|sqlite|auto>',
+                          metavar = 'NAME', default = 'auto',
+                          choices = ['none', 'tdb', 'sqlite', 'auto'])
         if has_chroot:
             parser.add_option('-j', '--jail',
                               help = 'Path to chroot into at startup',
@@ -178,8 +183,6 @@ class MasterConfig(object):
             parser.add_option('-L', '--listen6-addr',
                               help = 'IPv6 address to listen to',
                               metavar = 'ADDR')
-        parser.add_option('-N', '--no-db', action = 'store_true',
-                          help = 'Do not log to a database')
         parser.add_option('-n', '--max-servers', type = 'int',
                           help = 'Maximum number of servers to track',
                           metavar = 'NUM')
@@ -265,9 +268,6 @@ class MasterConfig(object):
         elif self.challengeport == self.port:
             raise ConfigError('Request port and challenge port must not be '
                               'the same ({0})'.format(self.port))
-
-        if config.no_db:
-            self.log(LOG_VERBOSE, 'Not using a database')
 
     def files(self):
         '''Read self.FEATURED_FILE, and for each label (starting at column 0)

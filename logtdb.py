@@ -7,6 +7,8 @@ from os import O_RDWR, O_CREAT
 from tdb import Tdb
 from time import asctime, gmtime
 
+db_id = 'Using TDB database backend'
+
 def log_client(addr, info):
     # TODO: check if flags are necessary
     with closing(Tdb('clientStats.tdb',

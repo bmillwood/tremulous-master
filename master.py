@@ -47,6 +47,7 @@ from time import time
 # Local imports
 from config import config, ConfigError
 from config import log, LOG_ERROR, LOG_PRINT, LOG_VERBOSE, LOG_DEBUG
+from db import dbconnect
 # inet_pton isn't defined on windows, so use our own
 from utils import inet_pton
 
@@ -57,28 +58,24 @@ except ConfigError as err:
     log(LOG_ERROR, err)
     exit(1)
 
+try:
+    log_client, log_gamestat, db_id = dbconnect(config.db)
+except ImportError as ex:
+    def nodb(*args):
+        '''This function is defined and used when the database import fails'''
+        log(LOG_DEBUG, 'No database, not logged:', args)
+    log_client = log_gamestat = nodb
+    log(LOG_PRINT, 'Warning: database not available')
+else:
+    log(LOG_VERBOSE, db_id)
+
 # Optional imports
 try:
     from signal import signal, SIGHUP, SIG_IGN
-    signal(SIGHUP, SIG_IGN)
 except ImportError:
     pass
-
-if not config.no_db:
-    try:
-        from db import log_client, log_gamestat
-    except ImportError:
-        def nodb(*args):
-            '''This function is defined and used when the db import is not
-            available, to print a debug-level warning message'''
-            log(LOG_DEBUG, 'No database available, not logged:', args)
-        log_client = log_gamestat = nodb
-        log(LOG_PRINT, 'Warning: no database available')
 else:
-    def disabled_db(*args):
-        '''This function is defined and used when the database is disabled by
-        configuration options'''
-    log_client = log_gamestat = disabled_db
+    signal(SIGHUP, SIG_IGN)
 
 # dict: socks[address_family].family == address_family
 inSocks, outSocks = dict(), dict()
