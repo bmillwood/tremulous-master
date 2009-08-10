@@ -413,6 +413,9 @@ def heartbeat(sock, addr, data):
 def filterpacket(data, addr):
     '''Called on every incoming packet, checks if it should immediately be
     dropped, returning the reason as a string'''
+    # forging a packet with source port 0 can lead to an error on response
+    if addr.port == 0:
+        return 'invalid port'
     if not data.startswith('\xff\xff\xff\xff'):
         return 'no header'
     if config.ignore(addr.host):
