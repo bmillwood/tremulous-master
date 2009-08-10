@@ -288,7 +288,12 @@ def getmotd(sock, addr, data):
         infostr = ''
     info = Info(infostr)
     rinfo = Info()
-    log_client(addr, info)
+    try:
+        log_client(addr, info)
+    except ValueError as err:
+        log(LOG_PRINT, addrstr, 'Client not logged', err, sep = ': ')
+    else:
+        log(LOG_VERBOSE, addrstr, 'Recorded client stat', sep = ': ')
 
     try:
         rinfo['challenge'] = info['challenge']
