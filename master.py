@@ -277,6 +277,7 @@ def gamestat(sock, addr, data):
     'gamestat') from the data'''
     assert data.startswith('gamestat')
     log_gamestat(addr, data[len('gamestat'):].lstrip())
+    log(LOG_VERBOSE, '<< {0}: Recorded gamestat'.format(addr))
 
 def getmotd(sock, addr, data):
     '''A client getmotd request: log the client information and then send the
