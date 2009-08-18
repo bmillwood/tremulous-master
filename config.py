@@ -98,7 +98,26 @@ except ImportError:
 # and their names
 loglevels = ['ALWAYS', 'ERROR', 'PRINT', 'VERBOSE', 'DEBUG']
 
-class ConfigError(Exception):
+def concat(*args, **kwargs):
+    # docstring TODO
+    try:
+        sep = kwargs['sep']
+        del kwargs['sep']
+    except KeyError:
+        sep = ' '
+
+    if kwargs:
+        raise TypeError('unexpected keyword arguments: ' +
+                        str(list(kwargs.keys())))
+
+    return sep.join(map(str, args))
+
+class ConcatError(Exception):
+    # docstring TODO
+    def __init__(self, *args, **kwargs):
+        Exception.__init__(self, concat(*args, **kwargs))
+
+class ConfigError(ConcatError):
     # docstring TODO
     pass
 
@@ -157,7 +176,7 @@ class MasterConfig(object):
         parser = OptionParser(add_help_option = False)
         parser.add_option('-h', '--help', action = 'store_true',
                           help = 'Display this help and exit')
-        # options other than --help are in alphabetical order
+        # options other than --help are in loose alphabetical order
         if has_ipv6:
             parser.add_option('-4', '--ipv4', action = 'store_false',
                               default = True, dest = 'ipv6',
@@ -225,12 +244,12 @@ class MasterConfig(object):
 
         self.verbose += self.v - self.q
 
-        self.log(LOG_VERBOSE, 'Logging:', *loglevels[:self.verbose + 1])
-
         if not LOG_ALWAYS <= self.verbose < LOG_LEVELS:
-            raise ConfigError('Verbose level must be between {0} and {1} '
-                              '(not {2})'.format(LOG_ALWAYS, LOG_LEVELS - 1,
-                                                 self.verbose))
+            raise ConfigError('Verbose level must be between', LOG_ALWAYS,
+                              'and', LOG_LEVELS - 1,
+                              '(not {0})'.format(self.verbose))
+
+        self.log(LOG_VERBOSE, 'Logging:', *loglevels[:self.verbose + 1])
 
         if not self.ipv4 and not self.ipv6:
             raise ConfigError('Cannot specify both --ipv4 and --ipv6')
@@ -239,8 +258,8 @@ class MasterConfig(object):
             try:
                 chroot(self.jail)
             except OSError as err:
-                raise ConfigError('chroot {0}: {1}'.format(self.jail,
-                                                           err.strerror))
+                raise ConfigError('chroot {0}:'.format(self.jail),
+                                  err.strerror)
             self.log(LOG_VERBOSE, 'Chrooted to', self.jail)
         if self.user is not None:
             try:
@@ -249,12 +268,12 @@ class MasterConfig(object):
                 try:
                     uid = int(self.user)
                 except ValueError:
-                    raise ConfigError('{0}: no such user'.format(self.user))
+                    raise ConfigError(self.user, 'no such user', sep = ': ')
 
             try:
                 setuid(uid)
             except OSError as err:
-                raise ConfigError('setuid {0}: {1}'.format(uid, err.strerror))
+                raise ConfigError('setuid {0}:'.format(uid), err.strerror)
 
             self.log(LOG_VERBOSE, 'UID set to', getuid())
 
@@ -281,11 +300,13 @@ class MasterConfig(object):
         # FIXME: use ConfigError where appropriate
         try:
             with open(self.FEATURED_FILE) as featured:
+                errmsg = self.FEATURED_FILE + ':'
                 self.log(LOG_DEBUG, 'Opened', self.FEATURED_FILE)
                 label = ''
                 lineno = 0
                 for line in iter(l.rstrip() for l in featured):
                     lineno += 1
+                    wheremsg = '{0}:{1}:'.format(self.FEATURED_FILE, lineno)
                     # ignore blank lines and comments
                     if not line or line.isspace() or \
                        line.lstrip().startswith('#'):
@@ -294,28 +315,27 @@ class MasterConfig(object):
                     if line[0].isspace():
                         addr = line.lstrip()
                         if not label:
-                            # maybe we should just bail at this point...
-                            self.log(LOG_PRINT, 'Warning: unlabelled server '
-                                                'in', self.FEATURED_FILE)
-                            label = 'Featured Servers'
-                            self.featured_servers[label] = dict()
+                            raise ConfigError(errmsg, 'Error: missing label')
                         try:
                             saddr = stringtosockaddr(addr)
                         except EnvironmentError as err:
                             # EnvironmentError covers socket.error and
                             # .gaierror without having to import them
-                            self.log(LOG_ERROR, 'Error: couldn\'t convert',
-                                addr, 'to address format:', err)
-                            raise SystemExit(1)
+                            raise ConfigError(wheremsg, "Error: couldn't "
+                                              'convert', addr,
+                                              'to address format:', err)
+                        if saddr in self.featured_servers[label].keys():
+                            self.log(LOG_PRINT, wheremsg, 'Warning:',
+                                     saddr, 'appears multiple times')
                         self.featured_servers[label][saddr] = None
                     # unindented lines start a new label
                     else:
+                        # clean up the old label
                         if label:
                             if not self.featured_servers[label]:
-                                # should this error be fatal?
-                                self.log(LOG_PRINT, 'Warning: no servers with '
-                                                    'label', repr(label),
-                                                    'in', self.FEATURED_FILE)
+                                raise ConfigError(wheremsg, 'Error: no '
+                                                  'addresses defined for',
+                                                  label)
                             else:
                                 # print a message of the form
                                 # featured.txt: 'Label': [server1, server2,...]
@@ -328,13 +348,12 @@ class MasterConfig(object):
                             # slashes are field seperators in
                             # getserversExtResponse
                             if c in '\\/':
-                                self.log(LOG_ERROR, 'Error:',
-                                         self.FEATURED_FILE, 'label',
-                                         repr(label), 'contains invalid '
-                                         'character:', c)
-                                raise SystemExit(1)
+                                raise ConfigError(wheremsg, 'Error:',
+                                         'label', repr(label), 'contains '
+                                         'invalid character:', c)
                         self.featured_servers[label] = dict()
                 if label:
+                    # print a message of the form
                     # featured.txt: 'Label': [server1, server2, ...]
                     self.log(LOG_VERBOSE, self.FEATURED_FILE, repr(label),
                              self.featured_servers[label].keys(), sep = ': ')
@@ -425,20 +444,11 @@ class MasterConfig(object):
         if level > self.verbose:
             return
 
-        try:
-            sep = kwargs['sep']
-            del kwargs['sep']
-        except KeyError:
-            sep = ' '
-
-        if kwargs:
-            raise TypeError('Unexpected keyword argument{0}: {1}'.format(
-                            's' if len(kwargs) != 1 else '',
-                            ' '.join(kwargs.keys())))
+        argstr = concat(*args, **kwargs)
 
         try:
             f = stderr if level in (LOG_ERROR, LOG_DEBUG) else stdout
-            f.write(self.logprefix(level) + sep.join(map(str, args)) + '\n')
+            f.write(self.logprefix(level) + argstr + '\n')
         except IOError as err:
             if err.errno == EIO:
                 pass
