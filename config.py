@@ -380,6 +380,9 @@ class MasterConfig(object):
         try:
             with open(self.IGNORE_FILE) as ignore:
                 for line in ignore:
+                    # comments
+                    if line.lstrip().startswith('#'):
+                        continue
                     for word in line.split():
                         try:
                             # is this CIDR?
