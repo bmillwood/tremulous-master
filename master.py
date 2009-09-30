@@ -444,7 +444,7 @@ try:
 
 except sockerr as err:
     log(LOG_ERROR, 'Couldn\'t initialise sockets:', err.strerror)
-    raise exit(1)
+    exit(1)
 
 while True:
     try:
