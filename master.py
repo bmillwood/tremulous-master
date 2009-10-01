@@ -186,7 +186,7 @@ class Server(object):
         self.challenge = challenge()
         packet = '\xff\xff\xff\xffgetinfo ' + self.challenge
         log(LOG_DEBUG, '>> {0}: {1!r}'.format(self, packet))
-        self.sock.sendto(packet, self.addr)
+        safe_send(self.sock, packet, self.addr)
         self.set_timeout(time() + config.CHALLENGE_TIMEOUT)
 
     def infoResponse(self, data):
@@ -227,6 +227,16 @@ class Server(object):
         self.lastactive = time()
         self.set_timeout(self.lastactive + config.SERVER_TIMEOUT)
         return True
+
+# Ideally, we should have a proper object to subclass sockets or something.
+def safe_send(sock, data, addr):
+    '''Network failures happen sometimes. When they do, it's best to just keep
+    going and whine about it loudly than die on the exception.'''
+    try:
+        sock.sendto(data, addr)
+    except sockerr as err:
+        log(LOG_ERROR, 'ERROR: sending to', addr, 'failed with error:',
+            err.strerror)
 
 def find_featured(addr):
     # docstring TODO
@@ -303,7 +313,7 @@ def getmotd(sock, addr, data):
 
     response = '\xff\xff\xff\xffmotd {0}'.format(rinfo)
     log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, response))
-    sock.sendto(response, addr)
+    safe_send(sock, response, addr)
 
 def filterservers(slist, af, protocol, empty, full):
     '''Return those servers in slist that test true (have been verified) and:
@@ -389,7 +399,7 @@ def getservers(sock, addr, data):
             message += '\\'
             log(LOG_DEBUG, '>> {0}: {1} servers'.format(addr, len(packet)))
             log(LOG_DEBUG, '>> {0}: {1!r}'.format(addr, message))
-            sock.sendto(message, addr)
+            safe_send(sock, message, addr)
             index += 1
     npstr = '1 packet' if numpackets == 1 else '{0} packets'.format(numpackets)
     log(LOG_VERBOSE, '>> {0}: getservers{1}Response: sent '
