@@ -61,7 +61,7 @@ ignore(addr):
 # Required imports
 from errno import ENOENT, EIO
 from optparse import OptionParser, Values
-from sys import argv, stdout
+from sys import argv, exit, stdout
 from time import strftime
 
 # Local imports
@@ -233,14 +233,14 @@ class MasterConfig(object):
 
         if self.help:
             stdout.write(parser.format_help())
-            raise SystemExit(0)
+            exit(0)
         # don't need this anymore
         parser.destroy()
         del parser
 
         if self.version:
             stdout.write('{0}\n'.format(self.VERSION))
-            raise SystemExit(0)
+            exit(0)
 
         self.verbose += self.v - self.q
 
