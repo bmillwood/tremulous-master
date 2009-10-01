@@ -61,7 +61,7 @@ ignore(addr):
 # Required imports
 from errno import ENOENT, EIO
 from optparse import OptionParser, Values
-from sys import argv, stdout, stderr
+from sys import argv, stdout
 from time import strftime
 
 # Local imports
@@ -450,8 +450,7 @@ class MasterConfig(object):
         argstr = concat(*args, **kwargs)
 
         try:
-            f = stderr if level in (LOG_ERROR, LOG_DEBUG) else stdout
-            f.write(self.logprefix(level) + argstr + '\n')
+            stdout.write(self.logprefix(level) + argstr + '\n')
         except IOError as err:
             if err.errno == EIO:
                 pass
