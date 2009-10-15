@@ -299,7 +299,7 @@ def getmotd(sock, addr, data):
     try:
         log_client(addr, info)
     except KeyError as err:
-        log(LOG_PRINT, addrstr, 'MOTD request rejected: missing info key',
+        log(LOG_PRINT, addrstr, 'Client not logged: missing info key',
             err, sep = ': ')
     except ValueError as err:
         log(LOG_PRINT, addrstr, 'Client not logged', err, sep = ': ')
