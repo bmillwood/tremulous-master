@@ -13,13 +13,11 @@ def log_client(addr, info):
     # TODO: check if flags are necessary
     with closing(Tdb('clientStats.tdb',
                      flags = O_RDWR|O_CREAT)) as database:
-        try:
-            version = info['version']
-            renderer = info['renderer']
-            if '\"' in version + renderer:
-                raise ValueError('Invalid character in info string')
-        except KeyError as err:
-            raise ValueError('Missing info key: ' + str(err))
+
+        version = info['version']
+        renderer = info['renderer']
+        if '\"' in version + renderer:
+            raise ValueError('Invalid character in info string')
 
         database[addr.host] = '"{0}" "{1}"'.format(version, renderer)
 
