@@ -436,7 +436,7 @@ def deserialise():
         for line in f:
             s = line.lstrip()
             if s == line:
-                label = s
+                label = s.rstrip()
                 continue
             if config.max_servers and count_servers() >= config.max_servers:
                 log(LOG_PRINT, 'Warning: max server count reached while '
