@@ -263,7 +263,7 @@ class MasterConfig(object):
             self.log(LOG_VERBOSE, 'Chrooted to', self.jail)
         if self.user is not None:
             try:
-                uid = getpwnam(self.user)[2]
+                uid = getpwnam(self.user).pw_uid
             except KeyError:
                 try:
                     uid = int(self.user)
