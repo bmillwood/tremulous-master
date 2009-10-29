@@ -35,13 +35,13 @@ Accepted incoming messages:
 """ # docstring TODO
 
 # Required imports
-from errno import EINTR
+from errno import EINTR, ENOENT
 from itertools import chain
 from random import choice
 from select import select, error as selecterror
 from socket import (socket, error as sockerr, has_ipv6,
                    AF_UNSPEC, AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
-from sys import exit
+from sys import exit, stderr
 from time import time
 
 # Local imports
@@ -49,7 +49,7 @@ from config import config, ConfigError
 from config import log, LOG_ERROR, LOG_PRINT, LOG_VERBOSE, LOG_DEBUG
 from db import dbconnect
 # inet_pton isn't defined on windows, so use our own
-from utils import inet_pton
+from utils import inet_pton, stringtosockaddr, valid_addr
 
 try:
     config.parse()
@@ -85,32 +85,29 @@ servers = dict((label, dict()) for label in
                chain(config.featured_servers.keys(), [None]))
 
 class Addr(tuple):
-    '''Data structure for storing socket addresses, that provides a parse
-    method and a nice string representation'''
-    def __new__(cls, addr = None, family = None):
+    '''Data structure for storing socket addresses, that provides parsing
+    methods and a nice string representation'''
+    def __new__(cls, arg, *args):
         '''This is necessary because tuple is an immutable data type, so
         inheritance rules are a bit funny.'''
         # I have some idea I should be using super() here
-        return tuple.__new__(cls, addr)
-
-    def __init__(self, addr = None, family = None):
-        '''Adds the host, port and family attributes to the addr tuple.
-        If no arguments are given, does nothing (assumes you're going to call
-        parse() or similar)'''
-        if addr is not None:
-            if family is None:
-                raise TypeError('Must give Addr either zero arguments or two')
-            self.host, self.port = addr[:2]
-            self.family = family
+        if args:
+            return tuple.__new__(cls, arg)
         else:
-            if family is not None:
-                raise TypeError('Must give Addr either zero arguments or two')
+            a = stringtosockaddr(arg)
+            return tuple.__new__(cls, a)
 
-    def parse(self, string):
-        '''Initialise and return self with the given string'''
-        af = valid_addr(string)
-        self.__init__(stringtosockaddr(string, af), af)
-        return self
+    def __init__(self, *args):
+        '''Adds the host, port and family attributes to the addr tuple.
+        If a single parameter is given, tries to parse it as an address string
+        '''
+        try:
+            addr, family = args
+            self.host, self.port = self[:2]
+            self.family = family
+        except ValueError:
+            self.host, self.port = self[:2]
+            self.family = valid_addr(self.host)
 
     def __str__(self):
         '''If self.family is AF_INET or AF_INET6, this provides a standard
@@ -156,8 +153,7 @@ class Info(dict):
 class Server(object):
     '''Data structure for tracking server timeouts and challenges'''
     def __init__(self, addr):
-        '''The init method does no work, aside from setting variables: it is
-        assumed the heartbeat method will be called pretty soon afterwards'''
+        # docstring TODO
         self.addr = addr
         self.sock = outSocks[addr.family]
         self.lastactive = 0
@@ -181,7 +177,7 @@ class Server(object):
         specified in the config module'''
         return time() > self.timeout
 
-    def heartbeat(self, data):
+    def send_challenge(self):
         '''Sends a getinfo challenge and records the current time'''
         self.challenge = challenge()
         packet = '\xff\xff\xff\xffgetinfo ' + self.challenge
@@ -420,7 +416,7 @@ def heartbeat(sock, addr, data):
     if label is not None:
         log(LOG_DEBUG, '<< {0}:'.format(addr), 'Featured server:', label)
     s = servers[label][addr] if addr in servers[label].keys() else Server(addr)
-    s.heartbeat(data)
+    s.send_challenge()
     servers[label][addr] = s
 
 def filterpacket(data, addr):
@@ -433,6 +429,39 @@ def filterpacket(data, addr):
         return 'no header'
     if config.ignore(addr.host):
         return 'blacklisted'
+
+def deserialise():
+    with open('serverlist.txt') as f:
+        label = None
+        for line in f:
+            s = line.lstrip()
+            if s == line:
+                label = s
+                continue
+            if count_servers() >= config.max_servers:
+                log(LOG_PRINT, 'Warning: max server count reached while '
+                    'restoring saved list, some servers will be dropped')
+                return
+            try:
+                addr = Addr(s)
+            except sockerr as err:
+                log(LOG_ERROR, 'Could not parse address in serverlist.txt:',
+                    err.strerror)
+            servers[label][addr] = Server(addr)
+            # verify the server as soon as possible
+            # could cause an initial flood of traffic, but unlikely to be
+            # anything that it can't handle
+            servers[label][addr].send_challenge()
+
+def serialise():
+    with open('serverlist.txt', 'w') as f:
+        # write no-label servers first
+        f.write(''.join('\t{0}\n'.format(s) for s in servers[None]))
+        for label in servers:
+            if label is None:
+                continue
+            f.write('{0}\n'.format(label))
+            f.write(''.join('\t{0}\n'.format(s) for s in servers[label]))
 
 try:
     if config.ipv4 and config.listen_addr:
@@ -459,6 +488,12 @@ except sockerr as err:
     log(LOG_ERROR, 'Couldn\'t initialise sockets:', err.strerror)
     exit(1)
 
+try:
+    deserialise()
+except IOError as err:
+    if err.errno != ENOENT:
+        log(LOG_ERROR, 'Error reading serverlist.txt:', err.strerror)
+
 while True:
     try:
         ret = select(chain(inSocks.values(), outSocks.values()), [], [])
@@ -470,7 +505,8 @@ while True:
             continue
         raise
     except KeyboardInterrupt:
-        exit('Interrupted')
+        stderr.write('Interrupted\n')
+        break
     prune_timeouts()
     for sock in inSocks.values():
         if sock in ready:
@@ -521,3 +557,5 @@ while True:
                 continue
             # this has got to be an infoResponse, right?
             servers[label][addr].infoResponse(data)
+
+serialise()
