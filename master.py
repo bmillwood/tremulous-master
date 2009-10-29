@@ -438,7 +438,7 @@ def deserialise():
             if s == line:
                 label = s
                 continue
-            if count_servers() >= config.max_servers:
+            if config.max_servers and count_servers() >= config.max_servers:
                 log(LOG_PRINT, 'Warning: max server count reached while '
                     'restoring saved list, some servers will be dropped')
                 return
