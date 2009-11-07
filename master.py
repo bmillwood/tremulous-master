@@ -431,6 +431,7 @@ def filterpacket(data, addr):
         return 'blacklisted'
 
 def deserialise():
+    count = 0
     with open('serverlist.txt') as f:
         label = None
         for line in f:
@@ -452,6 +453,8 @@ def deserialise():
             # could cause an initial flood of traffic, but unlikely to be
             # anything that it can't handle
             servers[label][addr].send_challenge()
+            count += 1
+    log(LOG_VERBOSE, 'Read', count, 'servers from cache')
 
 def serialise():
     with open('serverlist.txt', 'w') as f:
