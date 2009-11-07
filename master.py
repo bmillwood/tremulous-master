@@ -279,7 +279,11 @@ def gamestat(sock, addr, data):
     '''Delegates to log_gamestat, cutting the first token (that it asserts is
     'gamestat') from the data'''
     assert data.startswith('gamestat')
-    log_gamestat(addr, data[len('gamestat'):].lstrip())
+    try:
+        log_gamestat(addr, data[len('gamestat'):].lstrip())
+    except ValueError as err:
+        log(LOG_PRINT, '<< {0}: Gamestat not logged'.format(addr), err)
+        return
     log(LOG_VERBOSE, '<< {0}: Recorded gamestat'.format(addr))
 
 def getmotd(sock, addr, data):

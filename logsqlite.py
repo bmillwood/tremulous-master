@@ -6,12 +6,20 @@ from hashlib import md5
 db_id = 'Using SQLite database backend'
 
 def log_client(addr, info):
+    renderer = info['renderer']
+    version = info['version']
+    for c in renderer + version:
+        if ord(c) & 0x80:
+            raise ValueError('client infostring contained non-ASCII character')
     with connect('stats.db') as db:
         dbc = db.cursor()
         dbc.execute('INSERT INTO clients VALUES(?, ?, ?)',
-                    (addr.host, info['renderer'], info['version']))
+                    (addr.host, renderer, version))
 
 def log_gamestat(addr, data):
+    for c in data:
+        if ord(c) & 0x80:
+            raise ValueError('gamestat data contained non-ASCII character')
     with connect('stats.db') as db:
         dbc = db.cursor()
         dbc.execute('INSERT INTO gamestats VALUES(?, ?, ?)',
