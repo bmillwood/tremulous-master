@@ -440,9 +440,16 @@ def deserialise():
         label = None
         for line in f:
             s = line.lstrip()
+            # non-indented: label
             if s == line:
                 label = s.rstrip()
+                if label not in servers.keys():
+                    log(LOG_PRINT, 'Featured server label', k, 'in '
+                        'serverlist.txt does not exist in',
+                        config.FEATURED_FILE + ', ignoring')
+                    label = None
                 continue
+            # otherwise, indented: address
             if config.max_servers and count_servers() >= config.max_servers:
                 log(LOG_PRINT, 'Warning: max server count reached while '
                     'restoring saved list, some servers will be dropped')
