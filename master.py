@@ -476,6 +476,7 @@ def serialise():
                 continue
             f.write('{0}\n'.format(label))
             f.write(''.join('\t{0}\n'.format(s) for s in servers[label]))
+        log(LOG_PRINT, 'Wrote serverlist.txt')
 
 try:
     if config.ipv4 and config.listen_addr:
@@ -508,7 +509,7 @@ except IOError as err:
     if err.errno != ENOENT:
         log(LOG_ERROR, 'Error reading serverlist.txt:', err.strerror)
 
-while True:
+def mainloop():
     try:
         ret = select(chain(inSocks.values(), outSocks.values()), [], [])
         ready = ret[0]
@@ -516,11 +517,11 @@ while True:
         # select can be interrupted by a signal: if it wasn't a fatal signal,
         # we don't care
         if err.errno == EINTR:
-            continue
+            return
         raise
     except KeyboardInterrupt:
         stderr.write('Interrupted\n')
-        break
+        exit(130)
     prune_timeouts()
     for sock in inSocks.values():
         if sock in ready:
@@ -572,4 +573,8 @@ while True:
             # this has got to be an infoResponse, right?
             servers[label][addr].infoResponse(data)
 
-serialise()
+try:
+    while True:
+        mainloop()
+finally:
+    serialise()
