@@ -343,11 +343,18 @@ def getservers(sock, addr, data):
     tokens = data.split()
     ext = (tokens.pop(0) == 'getserversExt')
     if ext:
-        if tokens.pop(0) != 'Tremulous':
+        try:
+            game = tokens.pop(0)
+        except IndexError:
+            game = ''
+        if game != 'Tremulous':
             log(LOG_VERBOSE, '<< {0}: ext but not Tremulous, '
                              'ignored'.format(addr))
             return
-    protocol = tokens.pop(0)
+    try:
+        protocol = tokens.pop(0)
+    except IndexError:
+        log(LOG_VERBOSE, '<< {0}: no protocol specified'.format(addr))
     empty, full = 'empty' in tokens, 'full' in tokens
     if ext:
         family = (AF_INET  if 'ipv4' in tokens
