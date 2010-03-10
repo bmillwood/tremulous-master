@@ -407,16 +407,12 @@ class MasterConfig(object):
                                 return True
                             elif mask >= 8:
                                 if byte != ibyte:
-                                    break
+                                    return False
                                 mask -= 8
                             else:
                                 b, i = ord(byte), ord(ibyte)
                                 m = 0xff00 >> mask
-                                if b & m == i & m:
-                                    return True
-                                else:
-                                    break
-                return False
+                                return b & m == i & m
 
         except IOError as err:
             if err.errno != ENOENT:
