@@ -355,6 +355,7 @@ def getservers(sock, addr, data):
         protocol = tokens.pop(0)
     except IndexError:
         log(LOG_VERBOSE, '<< {0}: no protocol specified'.format(addr))
+        return
     empty, full = 'empty' in tokens, 'full' in tokens
     if ext:
         family = (AF_INET  if 'ipv4' in tokens
