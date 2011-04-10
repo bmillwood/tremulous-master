@@ -37,8 +37,10 @@ Accepted incoming messages:
 # Required imports
 from errno import EINTR, ENOENT
 from itertools import chain
+from os import kill, getpid
 from random import choice
 from select import select, error as selecterror
+from signal import signal, SIGINT, SIG_DFL
 from socket import (socket, error as sockerr, has_ipv6,
                    AF_UNSPEC, AF_INET, AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
 from sys import exit, stderr
@@ -528,8 +530,9 @@ def mainloop():
             return
         raise
     except KeyboardInterrupt:
-        stderr.write('Interrupted\n')
-        exit(130)
+        stderr.write('Interrupted')
+        signal(SIGINT, SIG_DFL)
+        kill(getpid(), SIGINT)
     prune_timeouts()
     for sock in inSocks.values():
         if sock in ready:
