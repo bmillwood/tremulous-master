@@ -529,10 +529,6 @@ def mainloop():
         if err.errno == EINTR:
             return
         raise
-    except KeyboardInterrupt:
-        stderr.write('Interrupted')
-        signal(SIGINT, SIG_DFL)
-        kill(getpid(), SIGINT)
     prune_timeouts()
     for sock in inSocks.values():
         if sock in ready:
@@ -587,5 +583,11 @@ def mainloop():
 try:
     while True:
         mainloop()
+except KeyboardInterrupt:
+    stderr.write('Interrupted')
+    signal(SIGINT, SIG_DFL)
+    # The following kill stops the finally from running.
+    # This may well be what we wanted anyway.
+    kill(getpid(), SIGINT)
 finally:
     serialise()
