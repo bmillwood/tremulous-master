@@ -74,12 +74,12 @@ has_chroot, has_setuid = True, True
 try:
     from os import chroot
 except ImportError:
-    has_chroot = True
+    has_chroot = False
 try:
     from os import setuid, getuid
     from pwd import getpwnam
 except ImportError:
-    has_setuid = True
+    has_setuid = False
 
 # I don't have a non-IPv6 computer, so I'm not sure how this works
 try:
