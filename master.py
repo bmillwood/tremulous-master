@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ###############################################################################
 # master.py - a master server for Tremulous
-# Copyright (c) 2009 Ben Millwood
+# Copyright (c) 2009-2011 Ben Millwood
 #
 # Thanks to Mathieu Olivier, who wrote much of the original master in C
 # (this project shares none of his code, but used it as a reference)
@@ -586,8 +586,9 @@ try:
 except KeyboardInterrupt:
     stderr.write('Interrupted')
     signal(SIGINT, SIG_DFL)
-    # The following kill stops the finally from running.
-    # This may well be what we wanted anyway.
+    # The following kill stops the finally from running,
+    # so let's do the serialise ourselves.
+    serialise()
     kill(getpid(), SIGINT)
 finally:
     serialise()
