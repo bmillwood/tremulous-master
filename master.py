@@ -454,7 +454,7 @@ def deserialise():
             if s == line:
                 label = s.rstrip()
                 if label not in servers.keys():
-                    log(LOG_PRINT, 'Featured server label', k, 'in '
+                    log(LOG_PRINT, 'Featured server label', label, 'in '
                         'serverlist.txt does not exist in',
                         config.FEATURED_FILE + ', ignoring')
                     label = None
