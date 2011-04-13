@@ -470,10 +470,10 @@ def deserialise():
                 log(LOG_ERROR, 'Could not parse address in serverlist.txt:',
                     err.strerror)
             servers[label][addr] = Server(addr)
-            # verify the server as soon as possible
+            # fake a heartbeat to verify the server as soon as possible
             # could cause an initial flood of traffic, but unlikely to be
             # anything that it can't handle
-            servers[label][addr].send_challenge()
+            heartbeat(addr)
             count += 1
     log(LOG_VERBOSE, 'Read', count, 'servers from cache')
 
@@ -576,6 +576,9 @@ def mainloop():
             # the outSocks are for getinfo challenges, so any response should
             # be from a server already known to us
             label = find_featured(addr)
+            # if label = find_featured(addr) is not None, it should be the
+            # case that servers[label][addr] exists
+            assert label is None or addr in servers[label].keys(), label
             if label is None and addr not in servers[None].keys():
                 log(LOG_VERBOSE, addrstr, 'rejected (unsolicited)')
                 continue
