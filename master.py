@@ -447,45 +447,29 @@ def filterpacket(data, addr):
 def deserialise():
     count = 0
     with open('serverlist.txt') as f:
-        label = None
         for line in f:
-            s = line.lstrip()
-            # non-indented: label
-            if s == line:
-                label = s.rstrip()
-                if label not in servers.keys():
-                    log(LOG_PRINT, 'Featured server label', label, 'in '
-                        'serverlist.txt does not exist in',
-                        config.FEATURED_FILE + ', ignoring')
-                    label = None
+            if not line:
                 continue
-            # otherwise, indented: address
-            if config.max_servers and count_servers() >= config.max_servers:
-                log(LOG_PRINT, 'Warning: max server count reached while '
-                    'restoring saved list, some servers will be dropped')
-                return
             try:
-                addr = Addr(s)
+                addr = Addr(line)
             except sockerr as err:
-                log(LOG_ERROR, 'Could not parse address in serverlist.txt:',
-                    err.strerror)
-            servers[label][addr] = Server(addr)
-            # fake a heartbeat to verify the server as soon as possible
-            # could cause an initial flood of traffic, but unlikely to be
-            # anything that it can't handle
-            heartbeat(addr)
-            count += 1
+                log(LOG_ERROR, 'Could not parse address in serverlist.txt',
+                    repr(line), err.strerror, sep = ': ')
+            except ValueError as err:
+                log(LOG_ERROR, 'Could not parse address in serverlist.txt',
+                    repr(line), str(err), sep = ': ')
+            else:
+                # fake a heartbeat to verify the server as soon as possible
+                # could cause an initial flood of traffic, but unlikely to be
+                # anything that it can't handle
+                log(LOG_DEBUG, '<< {0}:'.format(addr), 'Read from the cache')
+                heartbeat(addr)
+                count += 1
     log(LOG_VERBOSE, 'Read', count, 'servers from cache')
 
 def serialise():
     with open('serverlist.txt', 'w') as f:
-        # write no-label servers first
-        f.write(''.join('\t{0}\n'.format(s) for s in servers[None]))
-        for label in servers:
-            if label is None:
-                continue
-            f.write('{0}\n'.format(label))
-            f.write(''.join('\t{0}\n'.format(s) for s in servers[label]))
+        f.write('\n'.join(str(s) for sl in servers.values() for s in sl))
         log(LOG_PRINT, 'Wrote serverlist.txt')
 
 try:
