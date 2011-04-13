@@ -277,7 +277,7 @@ def count_servers(slist = servers):
     # docstring TODO
     return sum(map(len, servers.values()))
 
-def gamestat(sock, addr, data):
+def gamestat(addr, data):
     '''Delegates to log_gamestat, cutting the first token (that it asserts is
     'gamestat') from the data'''
     assert data.startswith('gamestat')
@@ -418,7 +418,7 @@ def getservers(sock, addr, data):
     log(LOG_VERBOSE, '>> {0}: getservers{1}Response: sent '
                      '{2}'.format(addr, 'Ext' if ext else '', npstr))
 
-def heartbeat(sock, addr, data):
+def heartbeat(addr):
     '''In response to an incoming heartbeat: call its heartbeat method, and
     add it to the list'''
     if config.max_servers >= 0 and count_servers() >= config.max_servers:
@@ -543,14 +543,16 @@ def mainloop():
                 log(LOG_VERBOSE, addrstr, 'rejected ({0})'.format(res))
                 continue
             data = data[4:] # skip header
+            # assemble a list of callbacks, to which we will give the
+            # socket to respond on, the address of the request, and the data
             responses = [
                 # this looks like it should be a dict but since we use
                 # startswith it wouldn't really improve matters
-                ('gamestat', gamestat),
+                ('gamestat', lambda s, a, d: gamestat(a, d)),
                 ('getmotd', getmotd),
                 ('getservers', getservers),
                 # getserversExt also starts with getservers
-                ('heartbeat', heartbeat),
+                ('heartbeat', lambda s, a, d: heartbeat(a)),
                 # infoResponses will arrive on an outSock
             ]
             for (name, func) in responses:
