@@ -459,12 +459,18 @@ def deserialise():
                 log(LOG_ERROR, 'Could not parse address in serverlist.txt',
                     repr(line), str(err), sep = ': ')
             else:
-                # fake a heartbeat to verify the server as soon as possible
-                # could cause an initial flood of traffic, but unlikely to be
-                # anything that it can't handle
-                log(LOG_DEBUG, '<< {0}:'.format(addr), 'Read from the cache')
-                heartbeat(addr)
-                count += 1
+                addrstr = '<< {0}:'.format(addr)
+                log(LOG_DEBUG, addrstr, 'Read from the cache')
+                if addr.family not in outSocks.keys():
+                     famstr = {AF_INET: 'IPv4', AF_INET6: 'IPv6'}[addr.family]
+                     log(LOG_PRINT, addrstr, famstr,
+                         'not available, dropping from cache')
+                else:
+                     # fake a heartbeat to verify the server as soon as
+                     # possible could cause an initial flood of traffic, but
+                     # unlikely to be anything that it can't handle
+                     heartbeat(addr)
+                     count += 1
     log(LOG_VERBOSE, 'Read', count, 'servers from cache')
 
 def serialise():
