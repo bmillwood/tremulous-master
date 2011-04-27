@@ -418,20 +418,32 @@ def getservers(sock, addr, data):
     log(LOG_VERBOSE, '>> {0}: getservers{1}Response: sent '
                      '{2}'.format(addr, 'Ext' if ext else '', npstr))
 
-def heartbeat(addr):
-    '''In response to an incoming heartbeat: call its heartbeat method, and
-    add it to the list'''
-    if config.max_servers >= 0 and count_servers() >= config.max_servers:
+def heartbeat(addr, data):
+    '''In response to an incoming heartbeat, find the associated server.
+    If this is a flatline, delete it, otherwise send it a challenge,
+    creating it if necessary and adding it to the list.'''
+    label = find_featured(addr)
+    addrstr = '<< {0}:'.format(addr)
+    if 'dead' in data:
+        if label is None:
+            if addr in servers[None].keys():
+                log(LOG_VERBOSE, addrstr, 'flatline, dropped')
+                del servers[label][addr]
+            else:
+                log(LOG_DEBUG, addrstr,
+                    'flatline from unknown server, ignored')
+        else:
+            # FIXME: we kind of assume featured servers don't go down
+            log(LOG_DEBUG, addrstr, 'flatline from featured server :(')
+    elif config.max_servers >= 0 and count_servers() >= config.max_servers:
         log(LOG_PRINT, 'Warning: max server count exceeded, '
                        'heartbeat from', addr, 'ignored')
-        return
-    # fetch or create a server record
-    label = find_featured(addr)
-    if label is not None:
-        log(LOG_DEBUG, '<< {0}:'.format(addr), 'Featured server:', label)
-    s = servers[label][addr] if addr in servers[label].keys() else Server(addr)
-    s.send_challenge()
-    servers[label][addr] = s
+    else:
+        # fetch or create a server record
+        label = find_featured(addr)
+        s = servers[label][addr] if addr in servers[label].keys() else Server(addr)
+        s.send_challenge()
+        servers[label][addr] = s
 
 def filterpacket(data, addr):
     '''Called on every incoming packet, checks if it should immediately be
@@ -469,7 +481,7 @@ def deserialise():
                      # fake a heartbeat to verify the server as soon as
                      # possible could cause an initial flood of traffic, but
                      # unlikely to be anything that it can't handle
-                     heartbeat(addr)
+                     heartbeat(addr, '')
                      count += 1
     log(LOG_VERBOSE, 'Read', count, 'servers from cache')
 
@@ -542,7 +554,7 @@ def mainloop():
                 ('getmotd', getmotd),
                 ('getservers', getservers),
                 # getserversExt also starts with getservers
-                ('heartbeat', lambda s, a, d: heartbeat(a)),
+                ('heartbeat', lambda s, a, d: heartbeat(a, d)),
                 # infoResponses will arrive on an outSock
             ]
             for (name, func) in responses:
